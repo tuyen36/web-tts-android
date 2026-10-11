@@ -28,8 +28,14 @@ public class SubtitleSpeaker {
         void onTtsError(int index);
     }
 
+    /** Callback hien toc do thuc te len UI. */
+    public interface RateDisplay {
+        void onRate(float effectiveRate);
+    }
+
     private final TextToSpeech tts;
     private final Listener listener;
+    private volatile RateDisplay rateDisplay;
 
     /** Offset giay: + doc truoc phu de, - doc sau. Port tu audio_offset. */
     private volatile float audioOffset = 0f;
@@ -37,6 +43,15 @@ public class SubtitleSpeaker {
     private volatile float seekThreshold = 1.2f;
     /** Toc do doc 0.5 - 2.5. Thay cho ffmpeg atempo MAX_SPEED=2.5. */
     private volatile float speechRate = 1.0f;
+    /** Tran tu dong tang toc cho cau dai (port MAX_SPEED Python). */
+    private static final float MAX_AUTO_RATE = 2.5f;
+    /**
+     * So ky tu doc duoc moi giay o toc do 1.0x (uoc luong cho giong Viet
+     * Google TTS). Cau nao uoc tinh doc lau hon timeline cua no thi
+     * tu tang rate de kip, toi da MAX_AUTO_RATE.
+     */
+    private static final float CHARS_PER_SEC_AT_1X = 11.0f;
+    private volatile float lastEffectiveRate = 1.0f;
 
     private volatile List<SubtitleCue> subtitles =
             java.util.Collections.emptyList();
@@ -103,6 +118,28 @@ public class SubtitleSpeaker {
     }
     public float getSpeechRate() { return speechRate; }
 
+    /** Toc do thuc te vua ap cho cau gan nhat (de UI hien thi). */
+    public float getLastEffectiveRate() { return lastEffectiveRate; }
+
+    public void setRateDisplay(RateDisplay d) { rateDisplay = d; }
+
+    /**
+     * Tinh rate can thiet de doc het text trong slot giay.
+     * Giong create_speed_audio() Python: raw/target, kep 1.0..MAX.
+     */
+    public float rateFor(String text, double slotSec) {
+        if (text == null || text.isEmpty()) return speechRate;
+        if (slotSec <= 0.05) return MAX_AUTO_RATE;
+        int chars = text.codePointCount(0, text.length());
+        float need = (chars / CHARS_PER_SEC_AT_1X) / (float) slotSec;
+        float base = speechRate <= 0 ? 1.0f : speechRate;
+        float want = base * need;
+        // Chi tang toc, khong giam: cau ngan giu giong doc tu nhien.
+        if (want < base) want = base;
+        if (want > MAX_AUTO_RATE) want = MAX_AUTO_RATE;
+        return want;
+    }
+
     public void setPlaying(boolean p) {
         boolean was = playing;
         playing = p;
@@ -151,11 +188,27 @@ public class SubtitleSpeaker {
         String text = cue.text;
         if (text.isEmpty()) return;
 
+        // Slot con lai cua cau: tu position hien tai den end cue.
+        // Port get_timeline() Python nhung tru phan da troi qua de tranh
+        // doc cham dan o cau dai.
+        double slot = cue.end - position - audioOffset;
+        if (slot < 0.3) slot = 0.3;
+        double cueLen = cue.duration();
+        if (slot > cueLen) slot = cueLen;
+        float effRate = rateFor(text, slot);
+        lastEffectiveRate = effRate;
+        RateDisplay rd = rateDisplay;
+        if (rd != null) {
+            try {
+                rd.onRate(effRate);
+            } catch (Exception ignored) {}
+        }
+
         try {
             tts.setLanguage(new Locale("vi", "VN"));
         } catch (Exception ignored) {}
         try {
-            tts.setSpeechRate(speechRate);
+            tts.setSpeechRate(effRate);
         } catch (Exception ignored) {}
 
         try {

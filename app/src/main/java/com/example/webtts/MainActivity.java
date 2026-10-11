@@ -179,6 +179,14 @@ public class MainActivity extends AppCompatActivity
                     runOnUiThread(() -> toast("TTS loi cau " + (index + 1)));
                 }
             });
+            // Hien toc do thuc te (co the > muc user chon khi gap cau dai).
+            speaker.setRateDisplay(new SubtitleSpeaker.RateDisplay() {
+                @Override public void onRate(float eff) {
+                    runOnUiThread(() -> tvRate.setText(
+                        String.format(Locale.US, "%.1fx (cau nay %.1fx)",
+                            rate, eff)));
+                }
+            });
             speaker.setSubtitles(subs);
             speaker.setAudioOffset(offset);
             speaker.setSpeechRate(rate);
