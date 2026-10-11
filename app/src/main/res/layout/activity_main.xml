@@ -204,6 +204,14 @@
             android:layout_weight="1"
             android:text="TV360"
             android:textSize="12sp" />
+
+        <Button
+            android:id="@+id/btnDesktop"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="Desktop: Bat"
+            android:textSize="12sp" />
     </LinearLayout>
 
     <!-- Am luong video goc + fullscreen -->

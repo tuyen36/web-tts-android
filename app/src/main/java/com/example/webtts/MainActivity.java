@@ -96,6 +96,9 @@ public class MainActivity extends AppCompatActivity
     private int videoVol = 30;     // % am luong video goc
     private boolean videoMuted = false;
     private boolean fullscreen = false;
+    /** Gia desktop de Netflix khong ep mo app goc. Mac dinh BAT. */
+    private boolean desktopMode = true;
+    private Button btnDesktop;
 
     private final Handler handler = new Handler(Looper.getMainLooper());
     private final Runnable ticker = new Runnable() {
@@ -143,6 +146,7 @@ public class MainActivity extends AppCompatActivity
         offset = sp.getFloat("offset", 0f);
         rate = sp.getFloat("rate", 1.0f);
         videoVol = sp.getInt("videoVol", 30);
+        desktopMode = sp.getBoolean("desktopMode", true);
         String lastUrl = sp.getString("lastUrl", PRESET_YT);
         etUrl.setText(lastUrl);
 
@@ -166,6 +170,9 @@ public class MainActivity extends AppCompatActivity
                 v -> openPreset(PRESET_FPT));
         findViewById(R.id.btnPresetTv).setOnClickListener(
                 v -> openPreset(PRESET_TV360));
+        btnDesktop = findViewById(R.id.btnDesktop);
+        btnDesktop.setOnClickListener(v -> toggleDesktopMode());
+        refreshDesktopBtn();
         btnMute.setOnClickListener(v -> toggleMute());
         btnFullscreen.setOnClickListener(v -> toggleFullscreen());
 
@@ -208,11 +215,15 @@ public class MainActivity extends AppCompatActivity
             @Override public void onStopTrackingTouch(SeekBar s) {}
         });
 
-        // WebView: doc currentTime tu <video> dau tien tren trang.
+        // WebView: gia desktop + doc currentTime tu <video>.
         WebSettings ws = webView.getSettings();
         ws.setJavaScriptEnabled(true);
         ws.setDomStorageEnabled(true);
         ws.setMediaPlaybackRequiresUserGesture(false);
+        ws.setLoadWithOverviewMode(true);
+        ws.setUseWideViewPort(true);
+        ws.setSupportMultipleWindows(false);
+        applyDesktopMode(ws);
         // Cho fullscreen video HTML5 (vimeo/player mot so trang can).
         webView.setWebChromeClient(new WebChromeClient());
         webView.setWebViewClient(new WebViewClient() {
@@ -423,6 +434,47 @@ public class MainActivity extends AppCompatActivity
         getSharedPreferences("webtts", MODE_PRIVATE)
                 .edit().putString("lastUrl", url).apply();
         webView.loadUrl(url);
+    }
+
+    // ---------- Gia desktop cho Netflix ----------
+
+    private static final String DESKTOP_UA =
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            + "AppleWebKit/537.36 (KHTML, like Gecko) "
+            + "Chrome/122.0.0.0 Safari/537.36";
+
+    private void applyDesktopMode(WebSettings ws) {
+        try {
+            if (desktopMode) {
+                ws.setUserAgentString(DESKTOP_UA);
+            } else {
+                ws.setUserAgentString(null); // ve UA mac dinh WebView
+            }
+        } catch (Exception ignored) {}
+        refreshDesktopBtn();
+    }
+
+    private void refreshDesktopBtn() {
+        if (btnDesktop != null) {
+            btnDesktop.setText(desktopMode ? "Desktop: Bat" : "Desktop: Tat");
+        }
+    }
+
+    private void toggleDesktopMode() {
+        desktopMode = !desktopMode;
+        getSharedPreferences("webtts", MODE_PRIVATE)
+                .edit().putBoolean("desktopMode", desktopMode).apply();
+        try {
+            applyDesktopMode(webView.getSettings());
+        } catch (Exception ignored) {}
+        refreshDesktopBtn();
+        // Doi UA phai load lai trang moi co tac dung.
+        try {
+            webView.reload();
+        } catch (Exception ignored) {}
+        toast(desktopMode
+                ? "Gia desktop BAT — Netflix se cho xem web."
+                : "Gia desktop TAT — ve giao dien mobile.");
     }
 
     private void injectHook() {
