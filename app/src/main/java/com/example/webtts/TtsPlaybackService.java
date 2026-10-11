@@ -94,6 +94,8 @@ public class TtsPlaybackService extends Service
     private float offset = 0f;
     private float rate = 1.0f;
     private int ttsVol = 100;
+    /** true = sub ra loa bao thuc (tach khoi Netflix), false = chung media. */
+    private boolean splitAudio = true;
     private String lastCueText = "...";
 
     private final Handler handler = new Handler(Looper.getMainLooper());
@@ -108,6 +110,7 @@ public class TtsPlaybackService extends Service
                 speaker.onPosition(position);
                 updateNotif();
             }
+            refreshFloatTime();
             handler.postDelayed(this, 250);
         }
     };
@@ -118,6 +121,7 @@ public class TtsPlaybackService extends Service
     private Button floatDot;
     private LinearLayout floatPanel;
     private TextView floatCue;
+    private TextView floatTime;
     private Button floatPlayPause;
     private WindowManager.LayoutParams floatParams;
     private boolean floatShown = false;
@@ -137,6 +141,7 @@ public class TtsPlaybackService extends Service
         offset = sp.getFloat("offset", 0f);
         rate = sp.getFloat("rate", 1.0f);
         ttsVol = sp.getInt("ttsVol", 100);
+        splitAudio = sp.getBoolean("splitAudio", true);
     }
 
     @Override
@@ -162,9 +167,51 @@ public class TtsPlaybackService extends Service
             speaker.setAudioOffset(offset);
             speaker.setSpeechRate(rate);
             speaker.setTtsVolume(ttsVol);
+            applySplitAudio();
             recomputeDuration();
             updateNotif();
         }
+    }
+
+    /**
+     * Tach/gop stream am thanh giong doc.
+     * GHI CHU (gioi han Android): Google TTS mac dinh phat tren STREAM_MUSIC
+     * chung voi Netflix -> phim cung to/nho theo. Dat PARAM_STREAM=ALARM thi
+     * phim cung media khong anh huong sub; sub doi sang volume bao thuc.
+     * Nhuoc: may de che do im lang / volume bao thuc nho thi sub nho theo.
+     */
+    private void applySplitAudio() {
+        if (speaker == null) return;
+        try {
+            if (splitAudio) {
+                speaker.setTtsStream(android.media.AudioManager.STREAM_ALARM);
+            } else {
+                speaker.setTtsStream(android.media.AudioManager.STREAM_MUSIC);
+            }
+        } catch (Exception ignored) {}
+    }
+
+    public static void setSplitAudio(boolean v) {
+        if (running != null) {
+            running.splitAudio = v;
+            running.applySplitAudio();
+        }
+    }
+
+    public static boolean getSplitAudio() {
+        return running == null || running.splitAudio;
+    }
+
+    /** "mm:ss / mm:ss" de can dong bo voi Netflix. */
+    public static String timeText() {
+        if (running == null) return "00:00 / 00:00";
+        return fmtTime(running.position) + " / " + fmtTime(running.duration);
+    }
+
+    private static String fmtTime(double sec) {
+        if (sec < 0) sec = 0;
+        int s = (int) sec;
+        return String.format(Locale.US, "%02d:%02d", s / 60, s % 60);
     }
 
     private void startFg() {
@@ -438,6 +485,13 @@ public class TtsPlaybackService extends Service
         floatCue.setMaxLines(2);
         floatPanel.addView(floatCue);
 
+        // Dong ho chay de can dong bo voi Netflix: "mm:ss / mm:ss".
+        floatTime = new TextView(ctx);
+        floatTime.setText(timeText());
+        floatTime.setTextColor(0xFF90CAF9);
+        floatTime.setTextSize(13);
+        floatPanel.addView(floatTime);
+
         LinearLayout row1 = new LinearLayout(ctx);
         row1.setOrientation(LinearLayout.HORIZONTAL);
         floatPlayPause = new Button(ctx);
@@ -445,13 +499,13 @@ public class TtsPlaybackService extends Service
         floatPlayPause.setTextSize(12);
         floatPlayPause.setOnClickListener(v -> setPlaying(!playing));
         Button bBack = new Button(ctx);
-        bBack.setText("-0.5s");
+        bBack.setText("-1s");
         bBack.setTextSize(12);
-        bBack.setOnClickListener(v -> nudge(-0.5));
+        bBack.setOnClickListener(v -> nudge(-1.0));
         Button bFwd = new Button(ctx);
-        bFwd.setText("+0.5s");
+        bFwd.setText("+1s");
         bFwd.setTextSize(12);
-        bFwd.setOnClickListener(v -> nudge(0.5));
+        bFwd.setOnClickListener(v -> nudge(1.0));
         row1.addView(floatPlayPause);
         row1.addView(bBack);
         row1.addView(bFwd);
@@ -496,6 +550,20 @@ public class TtsPlaybackService extends Service
         bHide.setText("An nut");
         bHide.setTextSize(12);
         bHide.setOnClickListener(v -> hideFloat());
+        Button bSplit = new Button(ctx);
+        bSplit.setText(splitAudio ? "Gop loa" : "Tach loa");
+        bSplit.setTextSize(12);
+        bSplit.setOnClickListener(v -> {
+            splitAudio = !splitAudio;
+            getSharedPreferences("webtts", MODE_PRIVATE)
+                    .edit().putBoolean("splitAudio", splitAudio).apply();
+            applySplitAudio();
+            bSplit.setText(splitAudio ? "Gop loa" : "Tach loa");
+            android.widget.Toast.makeText(ctx, splitAudio
+                    ? "Sub ra loa bao thuc — phim cung media khong anh huong."
+                    : "Sub chung loa media — phim cung to/nho theo.",
+                    android.widget.Toast.LENGTH_SHORT).show();
+        });
         Button bStop = new Button(ctx);
         bStop.setText("Dung doc");
         bStop.setTextSize(12);
@@ -512,6 +580,7 @@ public class TtsPlaybackService extends Service
             startActivity(i);
         });
         row3.addView(bHide);
+        row3.addView(bSplit);
         row3.addView(bStop);
         row3.addView(bOpen);
         floatPanel.addView(row3);
@@ -525,7 +594,18 @@ public class TtsPlaybackService extends Service
         if (floatPanel == null) return;
         boolean show = floatPanel.getVisibility() != View.VISIBLE;
         floatPanel.setVisibility(show ? View.VISIBLE : View.GONE);
-        if (show && floatCue != null) floatCue.setText(lastCueText);
+        if (show) {
+            if (floatCue != null) floatCue.setText(lastCueText);
+            refreshFloatTime();
+        }
+    }
+
+    /** Cap nhat "mm:ss / mm:ss" tren nut noi de can voi Netflix. */
+    private void refreshFloatTime() {
+        if (!floatShown || floatTime == null) return;
+        try {
+            floatTime.setText(timeText());
+        } catch (Exception ignored) {}
     }
 
     private void refreshFloatPlayBtn() {

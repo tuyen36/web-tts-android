@@ -53,10 +53,13 @@ public class SubtitleSpeaker {
     private static final float CHARS_PER_SEC_AT_1X = 11.0f;
     private volatile float lastEffectiveRate = 1.0f;
     /**
-     * Volume rieng cua giong doc sub (0.0 - 1.0). Doc lap voi volume media
-     * cua app Netflix/YouTube — dung de noi giong sub khi chay song song.
+     * Volume rieng cua giong doc sub (0.0 - 1.0). Dung de noi giong sub
+     * khi chay song song Netflix (van chung STREAM_MUSIC, xem GHI CHU
+     * trong TtsPlaybackService ve gioi han Android).
      */
     private volatile float ttsVolume = 1.0f;
+    /** PARAM_STREAM (API 21+): tach sub ra khoi stream media cua Netflix. */
+    private volatile int ttsStream = android.media.AudioManager.STREAM_MUSIC;
 
     private volatile List<SubtitleCue> subtitles =
             java.util.Collections.emptyList();
@@ -135,6 +138,10 @@ public class SubtitleSpeaker {
         ttsVolume = percent / 100.0f;
     }
     public int getTtsVolume() { return Math.round(ttsVolume * 100); }
+
+    /** Stream phat giong doc: MUSIC (chung) hoac ALARM (tach khoi Netflix). */
+    public void setTtsStream(int stream) { ttsStream = stream; }
+    public int getTtsStream() { return ttsStream; }
 
     /**
      * Tinh rate can thiet de doc het text trong slot giay.
@@ -231,6 +238,8 @@ public class SubtitleSpeaker {
             b.putString(TextToSpeech.Engine.KEY_PARAM_UTTERANCE_ID, utterId);
             // Volume rieng giong doc (minSdk 29 nen API 21+ luon dung).
             b.putFloat(TextToSpeech.Engine.KEY_PARAM_VOLUME, ttsVolume);
+            // Tach stream: ALARM thi phim cung media khong anh huong sub.
+            b.putInt(TextToSpeech.Engine.KEY_PARAM_STREAM, ttsStream);
             tts.speak(text, TextToSpeech.QUEUE_FLUSH, b, utterId);
         } catch (Exception e) {
             if (listener != null) listener.onTtsError(idx);
