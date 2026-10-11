@@ -1,24 +1,25 @@
 package com.example.webtts;
 
-import android.os.Build;
 import android.os.Bundle;
 import android.speech.tts.TextToSpeech;
 import android.speech.tts.UtteranceProgressListener;
 
 import java.util.List;
 import java.util.Locale;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Dieu khien Google TTS he thong de doc phu de theo timeline video.
  *
- * Port y tuong playback_loop() Python:
- * - tim cue hien tai theo position + audioOffset
- * - dang playing + co text -> speak() 1 lan / cau
- * - seek qua nguong -> huy cau cu, doc cau moi
- *
- * Khac Python: khong can Edge TTS / ffmpeg atempo / pygame.
- * Google TTS tu xu ly toc do qua setSpeechRate().
+ * V1.6 FIX tre luy tien — hoc dung triet ly file Python:
+ * - Python do raw_duration THAT bang ffprobe roi speed = raw/target.
+ * - Android khong co ffmpeg: TU DO toc do that lan dau gap cau
+ *   (onStart->onDone o rate 1.0x), luu theo do dai chu (~chars).
+ *   Lan sau: estimated = chars * secPerChar -> speed = estimated/slot.
+ * - Chua do kip: dung he so an toan 8 chu/giay (cham hon 11 cu de
+ *   tranh tinh thieu toc do gay lo slot).
+ * - Van kep 1.0..2.5 nhu MAX_SPEED Python, chi tang khong giam.
  */
 public class SubtitleSpeaker {
 
@@ -46,11 +47,10 @@ public class SubtitleSpeaker {
     /** Tran tu dong tang toc cho cau dai (port MAX_SPEED Python). */
     private static final float MAX_AUTO_RATE = 2.5f;
     /**
-     * So ky tu doc duoc moi giay o toc do 1.0x (uoc luong cho giong Viet
-     * Google TTS). Cau nao uoc tinh doc lau hon timeline cua no thi
-     * tu tang rate de kip, toi da MAX_AUTO_RATE.
+     * He so D PHONG khi chua do that: 8 chu/giay (cham hon 11 cu).
+     * Tinh du toc do de tranh lo slot gay tre luy tien.
      */
-    private static final float CHARS_PER_SEC_AT_1X = 11.0f;
+    private static final float SAFE_CHARS_PER_SEC = 8.0f;
     private volatile float lastEffectiveRate = 1.0f;
     /**
      * Volume rieng cua giong doc sub (0.0 - 1.0). Dung de noi giong sub
@@ -60,6 +60,23 @@ public class SubtitleSpeaker {
     private volatile float ttsVolume = 1.0f;
     /** PARAM_STREAM (API 21+): tach sub ra khoi stream media cua Netflix. */
     private volatile int ttsStream = android.media.AudioManager.STREAM_MUSIC;
+
+    // ----- tu hieu chinh toc do that (thay ffprobe) -----
+    /**
+     * So giay de doc 1 ky tu o rate 1.0x, hoc tu lan doc that dau tien.
+     * Mac dinh = 1/8s (he so an toan). Sau vai cau se hoi tu ve dung
+     * toc do that cua giong Google TTS tren may user.
+     */
+    private volatile float secPerCharAt1x = 1.0f / SAFE_CHARS_PER_SEC;
+    /** Thoi diem bat dau doc cau hien tai (do that). */
+    private volatile long speakStartMs = 0;
+    private volatile int speakStartChars = 0;
+    private volatile float speakStartRate = 1.0f;
+    /** Khoa hoc de tranh do sai khi speak chong nhau. */
+    private final Object calibLock = new Object();
+    /** Luu them theo bucket do dai de on dinh hon (tuy chon). */
+    private final ConcurrentHashMap<Integer, Float> bucketSecPerChar =
+            new ConcurrentHashMap<>();
 
     private volatile List<SubtitleCue> subtitles =
             java.util.Collections.emptyList();
@@ -79,6 +96,7 @@ public class SubtitleSpeaker {
             }
             @Override public void onDone(String id) {
                 int idx = idxOf(id);
+                onUtterDone();
                 if (listener != null && idx >= 0) listener.onSpeakDone(idx);
             }
             @Override public void onError(String id) {
@@ -86,6 +104,38 @@ public class SubtitleSpeaker {
                 if (listener != null && idx >= 0) listener.onTtsError(idx);
             }
         });
+    }
+
+    /**
+     * Hoc toc do that: lay thoi gian doc that vua xong o rate R,
+     * quy ve rate 1.0x: secPerChar = elapsed * R / chars.
+     * Chi hoc khi cau doc tron ven (>= 0.4s, <= 30s, rate hop le).
+     */
+    private void onUtterDone() {
+        long start;
+        int chars;
+        float rateUsed;
+        synchronized (calibLock) {
+            start = speakStartMs;
+            chars = speakStartChars;
+            rateUsed = speakStartRate;
+            speakStartMs = 0;
+        }
+        if (start <= 0 || chars < 5) return;
+        long elapsed = System.currentTimeMillis() - start;
+        if (elapsed < 400 || elapsed > 30000) return;
+        if (rateUsed < 0.5f || rateUsed > 2.6f) return;
+        float spc = (elapsed / 1000.0f) * rateUsed / chars;
+        // Loc nhieu: chi nhan gia tri 0.03..0.5s/ky tu (2..33 chu/giay).
+        if (spc < 0.03f || spc > 0.5f) return;
+        synchronized (calibLock) {
+            // Trung binh truot: 70% cu + 30% moi de on dinh.
+            secPerCharAt1x = secPerCharAt1x * 0.7f + spc * 0.3f;
+            int bucket = (chars / 20) * 20;
+            Float old = bucketSecPerChar.get(bucket);
+            bucketSecPerChar.put(bucket,
+                    old == null ? spc : old * 0.7f + spc * 0.3f);
+        }
     }
 
     private static int idxOf(String utteranceId) {
@@ -145,13 +195,21 @@ public class SubtitleSpeaker {
 
     /**
      * Tinh rate can thiet de doc het text trong slot giay.
-     * Giong create_speed_audio() Python: raw/target, kep 1.0..MAX.
+     * Giong create_speed_audio() Python: speed = raw/target, kep 1..2.5.
+     * raw o day = uoc luong tu toc do THAT da hoc (thay ffprobe).
      */
     public float rateFor(String text, double slotSec) {
         if (text == null || text.isEmpty()) return speechRate;
         if (slotSec <= 0.05) return MAX_AUTO_RATE;
         int chars = text.codePointCount(0, text.length());
-        float need = (chars / CHARS_PER_SEC_AT_1X) / (float) slotSec;
+        float spc;
+        synchronized (calibLock) {
+            int bucket = (chars / 20) * 20;
+            Float b = bucketSecPerChar.get(bucket);
+            spc = (b != null) ? b : secPerCharAt1x;
+        }
+        float estimated = chars * spc;
+        float need = estimated / (float) slotSec;
         float base = speechRate <= 0 ? 1.0f : speechRate;
         float want = base * need;
         // Chi tang toc, khong giam: cau ngan giu giong doc tu nhien.
@@ -173,6 +231,9 @@ public class SubtitleSpeaker {
             tts.stop();
         } catch (Exception ignored) {}
         currentIndex = -1;
+        synchronized (calibLock) {
+            speakStartMs = 0;
+        }
     }
 
     public int getCurrentIndex() { return currentIndex; }
@@ -210,9 +271,10 @@ public class SubtitleSpeaker {
 
         // Slot con lai cua cau: tu position hien tai den end cue.
         // Port get_timeline() Python nhung tru phan da troi qua de tranh
-        // doc cham dan o cau dai.
+        // doc cham dan o cau dai. Kep toi thieu 0.5s (thay vi 0.3) de
+        // tranh tang toc dot ngot vo ly khi vao cuoi cau.
         double slot = cue.end - position - audioOffset;
-        if (slot < 0.3) slot = 0.3;
+        if (slot < 0.5) slot = 0.5;
         double cueLen = cue.duration();
         if (slot > cueLen) slot = cueLen;
         float effRate = rateFor(text, slot);
@@ -234,6 +296,11 @@ public class SubtitleSpeaker {
         try {
             tts.stop();
             String utterId = "webtts-" + idx + "-" + utterSeq.incrementAndGet();
+            synchronized (calibLock) {
+                speakStartMs = System.currentTimeMillis();
+                speakStartChars = text.codePointCount(0, text.length());
+                speakStartRate = effRate;
+            }
             Bundle b = new Bundle();
             b.putString(TextToSpeech.Engine.KEY_PARAM_UTTERANCE_ID, utterId);
             // Volume rieng giong doc (minSdk 29 nen API 21+ luon dung).
