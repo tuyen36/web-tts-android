@@ -72,6 +72,8 @@ public class MainActivity extends AppCompatActivity {
     private TextView tvTtsVol;
     private Button btnPlayPause;
     private Button btnFloat;
+    private Button btnVoice;
+    private int voice = TtsPlaybackService.VOICE_GOOGLE;
     private Button btnMute;
     private Button btnFullscreen;
     private SeekBar seekPos;
@@ -148,17 +150,25 @@ public class MainActivity extends AppCompatActivity {
         LinearLayout playRow = (LinearLayout) btnPlayPause.getParent();
         playRow.addView(btnFloat);
 
+        // Nut chon giong doc: Google offline / HoaiMy online.
+        btnVoice = new Button(this);
+        btnVoice.setTextSize(12);
+        playRow.addView(btnVoice);
+        btnVoice.setOnClickListener(v -> toggleVoice());
+
         SharedPreferences sp =
                 getSharedPreferences("webtts", MODE_PRIVATE);
         offset = sp.getFloat("offset", 0f);
         rate = sp.getFloat("rate", 1.0f);
         videoVol = sp.getInt("videoVol", 30);
         ttsVol = sp.getInt("ttsVol", 100);
+        voice = sp.getInt("voice", TtsPlaybackService.VOICE_GOOGLE);
         desktopMode = sp.getBoolean("desktopMode", true);
         String lastUrl = sp.getString("lastUrl", PRESET_YT);
         etUrl.setText(lastUrl);
 
         buildOffsetRow();
+        refreshVoiceBtn();
         seekRate.setProgress(Math.round((rate - 0.5f) / 2.0f * 200));
         tvRate.setText(String.format(Locale.US, "%.1fx", rate));
         seekVideoVol.setProgress(videoVol);
@@ -345,6 +355,9 @@ public class MainActivity extends AppCompatActivity {
             toast("Chon file .srt truoc.");
             return;
         }
+        if (p && voice == TtsPlaybackService.VOICE_HOAIMY) {
+            toast("HoaiMy online: dang tai 35 cau dau, cho chut...");
+        }
         playing = p;
         refreshPlayBtn();
         ensureService();
@@ -354,6 +367,29 @@ public class MainActivity extends AppCompatActivity {
 
     private void refreshPlayBtn() {
         btnPlayPause.setText(playing ? "Pause" : "Play");
+    }
+
+    /** Doi giong Google offline <-> HoaiMy online. */
+    private void toggleVoice() {
+        voice = (voice == TtsPlaybackService.VOICE_GOOGLE)
+                ? TtsPlaybackService.VOICE_HOAIMY
+                : TtsPlaybackService.VOICE_GOOGLE;
+        getSharedPreferences("webtts", MODE_PRIVATE)
+                .edit().putInt("voice", voice).apply();
+        ensureService();
+        TtsPlaybackService.setVoice(voice);
+        refreshVoiceBtn();
+        if (voice == TtsPlaybackService.VOICE_HOAIMY) {
+            toast("Giong HoaiMy (online) — can mang, preload 35 cau.");
+        } else {
+            toast("Giong Google (offline) — khong can mang.");
+        }
+    }
+
+    private void refreshVoiceBtn() {
+        if (btnVoice == null) return;
+        btnVoice.setText(voice == TtsPlaybackService.VOICE_HOAIMY
+                ? "HoaiMy" : "Google");
     }
 
     private void ensureService() {
@@ -638,7 +674,9 @@ public class MainActivity extends AppCompatActivity {
     protected void onResume() {
         super.onResume();
         playing = TtsPlaybackService.isPlayingNow();
+        voice = TtsPlaybackService.getVoice();
         refreshPlayBtn();
+        refreshVoiceBtn();
     }
 
     @Override

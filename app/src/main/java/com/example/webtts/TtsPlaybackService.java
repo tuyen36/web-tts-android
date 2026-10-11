@@ -31,14 +31,15 @@ import java.util.List;
 import java.util.Locale;
 
 /**
- * V1.4: Service doc sub CHAY NEN + nut noi dieu khien.
+ * V1.7: Service doc sub CHAY NEN + nut noi dieu khien + 2 giong.
  *
- * - Om tron TextToSpeech + SubtitleSpeaker o day (DUY NHAT, khong con
- *   TTS o Activity -> het loi doc trung giong).
- * - MainActivity chi gui lenh (play/pause/seek/offset/rate/volume) + sub.
+ * - Giong GOOGLE (offline): TextToSpeech + SubtitleSpeaker nhu cu.
+ * - Giong HOAIMY Edge (online): EdgeVoiceEngine tai mp3 + preload 35 cau,
+ *   do raw THAT bang MediaPlayer, speed = raw/target (port Python).
+ * - MainActivity chi gui lenh (play/pause/seek/offset/rate/volume/voice) + sub.
  * - Nut noi tron mo 50% luon tren cung (TYPE_APPLICATION_OVERLAY),
- *   keo di duoc. Bam vao bung panel: Play/Pause, -0.5s/+0.5s,
- *   volume giong doc, Stop.
+ *   keo di duoc. Bam vao bung panel: Play/Pause, -1s/+1s, gio chay,
+ *   volume giong doc, chon giong, Stop.
  * - Ticker chay doc lap 250ms nen tat man / sang app Netflix van doc.
  */
 public class TtsPlaybackService extends Service
@@ -88,6 +89,12 @@ public class TtsPlaybackService extends Service
     private SubtitleSpeaker speaker;
     private boolean ttsReady = false;
 
+    /** 0 = Google offline, 1 = HoaiMy Edge online. */
+    public static final int VOICE_GOOGLE = 0;
+    public static final int VOICE_HOAIMY = 1;
+    private int voice = VOICE_GOOGLE;
+    private EdgeVoiceEngine edge;
+
     private boolean playing = false;
     private double position = 0;
     private double duration = 0;
@@ -101,19 +108,45 @@ public class TtsPlaybackService extends Service
     private final Handler handler = new Handler(Looper.getMainLooper());
     private final Runnable ticker = new Runnable() {
         @Override public void run() {
-            if (playing && duration > 0 && ttsReady && speaker != null) {
+            if (playing && duration > 0) {
                 position += 0.25;
                 if (position >= duration) {
                     position = duration;
                     setPlaying(false);
                 }
-                speaker.onPosition(position);
+                driveEngines();
                 updateNotif();
             }
             refreshFloatTime();
             handler.postDelayed(this, 250);
         }
     };
+
+    /** Day position cho engine dang chon (Google hoac HoaiMy). */
+    private void driveEngines() {
+        if (voice == VOICE_HOAIMY && edge != null) {
+            int idx = SubtitleParser.findIndex(sharedSubs, position + offset);
+            if (idx >= 0) {
+                SubtitleCue cue = sharedSubs.get(idx);
+                if (idx != edge.getCurrentIndex()) {
+                    double slot = cue.end - position - offset;
+                    if (slot < 0.5) slot = 0.5;
+                    if (slot > cue.duration()) slot = cue.duration();
+                    int stream = splitAudio
+                            ? android.media.AudioManager.STREAM_ALARM
+                            : android.media.AudioManager.STREAM_MUSIC;
+                    boolean ok = edge.speak(idx, slot, stream);
+                    if (ok) {
+                        lastCueText = cue.text;
+                        if (floatCue != null) floatCue.setText(lastCueText);
+                        edge.preloadFrom(idx);
+                    }
+                }
+            }
+        } else if (ttsReady && speaker != null) {
+            speaker.onPosition(position);
+        }
+    }
 
     // ----- nut noi -----
     private WindowManager wm;
@@ -123,6 +156,7 @@ public class TtsPlaybackService extends Service
     private TextView floatCue;
     private TextView floatTime;
     private Button floatPlayPause;
+    private Button floatVoiceBtn;
     private WindowManager.LayoutParams floatParams;
     private boolean floatShown = false;
 
@@ -133,6 +167,24 @@ public class TtsPlaybackService extends Service
         loadPrefs();
         startFg();
         tts = new TextToSpeech(getApplicationContext(), this);
+        edge = new EdgeVoiceEngine(this, new EdgeVoiceEngine.Listener() {
+            @Override public void onReady(int index, int cached, int total) {
+                handler.post(() -> updateNotif());
+            }
+            @Override public void onError(int index, String msg) {}
+            @Override public void onSpeakStart(int index) {
+                handler.post(() -> {
+                    if (index >= 0 && index < sharedSubs.size()) {
+                        lastCueText = sharedSubs.get(index).text;
+                        if (floatCue != null) floatCue.setText(lastCueText);
+                    }
+                });
+            }
+            @Override public void onSpeakDone(int index) {}
+        });
+        edge.setSubtitles(sharedSubs);
+        edge.setBaseRate(rate);
+        edge.setTtsVolume(ttsVol);
         handler.post(ticker);
     }
 
@@ -142,6 +194,7 @@ public class TtsPlaybackService extends Service
         rate = sp.getFloat("rate", 1.0f);
         ttsVol = sp.getInt("ttsVol", 100);
         splitAudio = sp.getBoolean("splitAudio", true);
+        voice = sp.getInt("voice", VOICE_GOOGLE);
     }
 
     @Override
@@ -244,11 +297,16 @@ public class TtsPlaybackService extends Service
     }
 
     private String notifText() {
+        String v = voice == VOICE_HOAIMY ? "HoaiMy" : "Google";
         if (sharedCount > 0) {
-            return (playing ? "Dang doc" : "Tam dung") + " "
-                    + sharedCount + " cau sub";
+            String base = (playing ? "Dang doc" : "Tam dung") + " "
+                    + sharedCount + " cau (" + v + ")";
+            if (voice == VOICE_HOAIMY && edge != null) {
+                base += " - tai " + edge.readyCount() + " cau";
+            }
+            return base;
         }
-        return "Cho nap phu de .srt";
+        return "Cho nap phu de .srt (" + v + ")";
     }
 
     private void updateNotif() {
@@ -304,8 +362,19 @@ public class TtsPlaybackService extends Service
         }
         playing = p;
         if (speaker != null) speaker.setPlaying(p);
-        if (!p && tts != null) {
-            try { tts.stop(); } catch (Exception ignored) {}
+        if (edge != null) edge.setPlaying(p);
+        if (!p) {
+            if (tts != null) {
+                try { tts.stop(); } catch (Exception ignored) {}
+            }
+            if (edge != null) edge.stopPlayer();
+        } else {
+            // Bam Play: preload ngay 35 cau HoaiMy (port _preload_initial).
+            if (voice == VOICE_HOAIMY && edge != null) {
+                int idx = SubtitleParser.findIndex(sharedSubs, position + offset);
+                if (idx < 0) idx = 0;
+                edge.preloadFrom(idx);
+            }
         }
         refreshFloatPlayBtn();
         updateNotif();
@@ -315,7 +384,14 @@ public class TtsPlaybackService extends Service
         position += delta;
         if (position < 0) position = 0;
         if (duration > 0 && position > duration) position = duration;
-        if (speaker != null) speaker.onPosition(position);
+        if (voice == VOICE_HOAIMY && edge != null) {
+            edge.stopPlayer();
+            int idx = SubtitleParser.findIndex(sharedSubs, position + offset);
+            if (idx >= 0) edge.preloadFrom(idx);
+        } else if (speaker != null) {
+            speaker.onPosition(position);
+        }
+        refreshFloatTime();
     }
 
     private void applyShared() {
@@ -324,6 +400,11 @@ public class TtsPlaybackService extends Service
             speaker.setAudioOffset(offset);
             speaker.setSpeechRate(rate);
             speaker.setTtsVolume(ttsVol);
+        }
+        if (edge != null) {
+            edge.setSubtitles(sharedSubs);
+            edge.setBaseRate(rate);
+            edge.setTtsVolume(ttsVol);
         }
         recomputeDuration();
         updateNotif();
@@ -370,6 +451,7 @@ public class TtsPlaybackService extends Service
         if (running != null) {
             running.rate = v;
             if (running.speaker != null) running.speaker.setSpeechRate(v);
+            if (running.edge != null) running.edge.setBaseRate(v);
         }
     }
 
@@ -377,11 +459,51 @@ public class TtsPlaybackService extends Service
         if (running != null) {
             running.ttsVol = p;
             if (running.speaker != null) running.speaker.setTtsVolume(p);
+            if (running.edge != null) running.edge.setTtsVolume(p);
         }
     }
 
     public static int getTtsVolume() {
         return running != null ? running.ttsVol : 100;
+    }
+
+    /** 0 = Google offline, 1 = HoaiMy Edge online. */
+    public static void setVoice(int v) {
+        if (running != null) {
+            boolean changed = running.voice != v;
+            running.voice = v;
+            if (changed) {
+                // Doi giong: dung engine cu, preload lai engine moi.
+                if (running.speaker != null) running.speaker.stop();
+                if (running.tts != null) {
+                    try { running.tts.stop(); } catch (Exception ignored) {}
+                }
+                if (running.edge != null) running.edge.stopPlayer();
+                if (v == VOICE_HOAIMY && running.edge != null
+                        && running.playing) {
+                    int idx = SubtitleParser.findIndex(sharedSubs,
+                            running.position + running.offset);
+                    if (idx < 0) idx = 0;
+                    running.edge.preloadFrom(idx);
+                }
+                running.updateNotif();
+                running.refreshFloatVoiceBtn();
+            }
+        }
+    }
+
+    public static int getVoice() {
+        return running != null ? running.voice : VOICE_GOOGLE;
+    }
+
+    public static String voiceName() {
+        return getVoice() == VOICE_HOAIMY ? "HoaiMy (online)" : "Google (offline)";
+    }
+
+    /** So cau HoaiMy da tai xong de hien tien do preload. */
+    public static String edgeProgress() {
+        if (running == null || running.edge == null) return "";
+        return running.edge.readyCount() + " cau";
     }
 
     public static void setPosition(double pos) {
@@ -535,6 +657,7 @@ public class TtsPlaybackService extends Service
                 getSharedPreferences("webtts", MODE_PRIVATE)
                         .edit().putInt("ttsVol", p).apply();
                 if (speaker != null) speaker.setTtsVolume(p);
+                if (edge != null) edge.setTtsVolume(p);
             }
             @Override public void onStartTrackingTouch(SeekBar s) {}
             @Override public void onStopTrackingTouch(SeekBar s) {}
@@ -543,6 +666,21 @@ public class TtsPlaybackService extends Service
         row2.addView(vol);
         row2.addView(vv);
         floatPanel.addView(row2);
+
+        // Hang chon giong: Google offline / HoaiMy online.
+        LinearLayout rowVoice = new LinearLayout(ctx);
+        rowVoice.setOrientation(LinearLayout.HORIZONTAL);
+        floatVoiceBtn = new Button(ctx);
+        floatVoiceBtn.setTextSize(12);
+        refreshFloatVoiceBtn();
+        floatVoiceBtn.setOnClickListener(v -> {
+            int nv = (voice == VOICE_GOOGLE) ? VOICE_HOAIMY : VOICE_GOOGLE;
+            setVoice(nv);
+            getSharedPreferences("webtts", MODE_PRIVATE)
+                    .edit().putInt("voice", nv).apply();
+        });
+        rowVoice.addView(floatVoiceBtn);
+        floatPanel.addView(rowVoice);
 
         LinearLayout row3 = new LinearLayout(ctx);
         row3.setOrientation(LinearLayout.HORIZONTAL);
@@ -614,6 +752,14 @@ public class TtsPlaybackService extends Service
         }
     }
 
+    private void refreshFloatVoiceBtn() {
+        if (floatVoiceBtn != null) {
+            floatVoiceBtn.setText(voice == VOICE_HOAIMY
+                    ? "Giong: HoaiMy (online)"
+                    : "Giong: Google (offline)");
+        }
+    }
+
     @Override
     public void onDestroy() {
         handler.removeCallbacks(ticker);
@@ -623,6 +769,9 @@ public class TtsPlaybackService extends Service
                 tts.stop();
                 tts.shutdown();
             }
+        } catch (Exception ignored) {}
+        try {
+            if (edge != null) edge.shutdown();
         } catch (Exception ignored) {}
         running = null;
         super.onDestroy();
