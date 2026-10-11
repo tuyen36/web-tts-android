@@ -780,17 +780,10 @@ public class TtsPlaybackService extends Service
             hideFloat();
         });
         Button bOpen = new Button(ctx);
-        bOpen.setText("Mo web");
+        bOpen.setText("Mo app");
         bOpen.setTextSize(12);
         bOpen.setOnClickListener(v -> {
-            Intent i = new Intent(ctx, WebActivity.class);
-            i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-            startActivity(i);
-        });
-        Button bSetup = new Button(ctx);
-        bSetup.setText("Cai dat");
-        bSetup.setTextSize(12);
-        bSetup.setOnClickListener(v -> {
+            // V2.0: 1 Activity 2 tab — mo app la thay ca 2 tab.
             Intent i = new Intent(ctx, MainActivity.class);
             i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
             startActivity(i);
@@ -798,12 +791,8 @@ public class TtsPlaybackService extends Service
         row3.addView(bHide);
         row3.addView(bSplit);
         row3.addView(bStop);
-        LinearLayout row4 = new LinearLayout(ctx);
-        row4.setOrientation(LinearLayout.HORIZONTAL);
-        row4.addView(bOpen);
-        row4.addView(bSetup);
+        row3.addView(bOpen);
         floatPanel.addView(row3);
-        floatPanel.addView(row4);
 
         root.addView(floatDot);
         root.addView(floatPanel);

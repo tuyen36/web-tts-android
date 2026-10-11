@@ -17,6 +17,7 @@
         android:label="@string/app_name"
         android:theme="@style/Theme.WebTTS"
         android:hardwareAccelerated="true">
+        <!-- V2.0: 1 Activity 2 tab, khong con WebActivity rieng -->
         <activity
             android:name=".MainActivity"
             android:configChanges="orientation|screenSize|keyboardHidden|screenLayout|smallestScreenSize"
@@ -26,11 +27,6 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
-        <!-- V1.9: man WebView rieng, mo tu MainActivity -->
-        <activity
-            android:name=".WebActivity"
-            android:configChanges="orientation|screenSize|keyboardHidden|screenLayout|smallestScreenSize"
-            android:exported="false" />
         <service
             android:name=".TtsPlaybackService"
             android:exported="false"

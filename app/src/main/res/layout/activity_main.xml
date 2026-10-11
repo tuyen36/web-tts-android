@@ -1,140 +1,416 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- V1.9: Man Cai dat rieng (TTS) — WebView tach sang WebActivity. -->
-<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+<!-- V2.0: 1 Activity 2 tab — tab Cai dat + tab Web chung WebView, khong tai lai trang. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="#111111"
-    android:fillViewport="true">
+    android:orientation="vertical"
+    android:background="#0D1117">
 
+    <!-- Thanh tab tren -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="vertical"
-        android:padding="12dp">
+        android:orientation="horizontal"
+        android:padding="8dp">
 
-        <TextView
-            android:layout_width="wrap_content"
+        <Button
+            android:id="@+id/tabSetup"
+            android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:text="Web TTS — Cai dat"
-            android:textColor="#FFFFFF"
-            android:textSize="18sp"
+            android:layout_weight="1"
+            android:text="⚙  Cai dat"
+            android:textSize="14sp"
             android:textStyle="bold" />
 
-        <TextView
-            android:id="@+id/tvStatus"
-            android:layout_width="wrap_content"
+        <Button
+            android:id="@+id/tabWeb"
+            android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:layout_marginTop="2dp"
-            android:text="Chua co phu de — chon .srt"
-            android:textColor="#888888"
-            android:textSize="12sp" />
+            android:layout_marginStart="8dp"
+            android:layout_weight="1"
+            android:text="🌐  Web"
+            android:textSize="14sp" />
+    </LinearLayout>
+
+    <!-- ===== TAB CAI DAT ===== -->
+    <ScrollView
+        android:id="@+id/paneSetup"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:fillViewport="true">
 
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            android:orientation="horizontal">
+            android:orientation="vertical"
+            android:padding="16dp">
 
-            <Button
-                android:id="@+id/btnPickSrt"
-                android:layout_width="0dp"
+            <LinearLayout
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:text="Chon .srt"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="Web TTS"
+                    android:textColor="#FFFFFF"
+                    android:textSize="22sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/tvVoiceBadge"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:background="#1C2128"
+                    android:paddingLeft="10dp"
+                    android:paddingRight="10dp"
+                    android:paddingTop="4dp"
+                    android:paddingBottom="4dp"
+                    android:text="Google"
+                    android:textColor="#58A6FF"
+                    android:textSize="12sp" />
+            </LinearLayout>
+
+            <TextView
+                android:id="@+id/tvStatus"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:text="Chua co phu de — chon file .srt"
+                android:textColor="#8B949E"
                 android:textSize="13sp" />
+
+            <!-- The cau dang doc -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:background="#161B22"
+                android:orientation="vertical"
+                android:padding="14dp">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="DANG DOC"
+                    android:textColor="#58A6FF"
+                    android:textSize="11sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/tvCue"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:minHeight="56dp"
+                    android:maxLines="4"
+                    android:ellipsize="end"
+                    android:text="..."
+                    android:textColor="#FFFFFF"
+                    android:textSize="17sp" />
+
+                <TextView
+                    android:id="@+id/tvTime"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:text="00:00 / 00:00"
+                    android:textColor="#58A6FF"
+                    android:textSize="13sp" />
+            </LinearLayout>
+
+            <SeekBar
+                android:id="@+id/seekPos"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp" />
 
             <Button
                 android:id="@+id/btnPlayPause"
-                android:layout_width="0dp"
+                android:layout_width="match_parent"
+                android:layout_height="56dp"
+                android:layout_marginTop="8dp"
+                android:backgroundTint="#1F6FEB"
+                android:text="▶  Play"
+                android:textSize="17sp"
+                android:textStyle="bold" />
+
+            <Button
+                android:id="@+id/btnPickSrt"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:text="Play"
-                android:textSize="13sp" />
-        </LinearLayout>
+                android:layout_marginTop="8dp"
+                android:text="📁  Chon file phu de (.srt)"
+                android:textSize="14sp" />
 
-        <TextView
-            android:id="@+id/tvCue"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            android:minHeight="48dp"
-            android:maxLines="4"
-            android:ellipsize="end"
-            android:text="..."
-            android:textColor="#FFFFFF"
-            android:textSize="15sp" />
-
-        <SeekBar
-            android:id="@+id/seekPos"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content" />
-
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="6dp"
-            android:text="Offset dong bo:"
-            android:textColor="#CCCCCC"
-            android:textSize="12sp" />
-
-        <HorizontalScrollView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:scrollbars="none">
-
-            <LinearLayout
-                android:id="@+id/rowOffset"
+            <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:orientation="horizontal" />
-        </HorizontalScrollView>
+                android:layout_marginTop="14dp"
+                android:text="Giong doc"
+                android:textColor="#8B949E"
+                android:textSize="12sp" />
 
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            android:text="Toc do doc:"
-            android:textColor="#CCCCCC"
-            android:textSize="12sp" />
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:orientation="horizontal">
+
+                <Button
+                    android:id="@+id/btnVoiceGoogle"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="Google (offline)"
+                    android:textSize="13sp" />
+
+                <Button
+                    android:id="@+id/btnVoiceHoaiMy"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="8dp"
+                    android:layout_weight="1"
+                    android:text="HoaiMy (online)"
+                    android:textSize="13sp" />
+            </LinearLayout>
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="14dp"
+                android:text="Toc do doc"
+                android:textColor="#8B949E"
+                android:textSize="12sp" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <SeekBar
+                    android:id="@+id/seekRate"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:max="200"
+                    android:progress="50" />
+
+                <TextView
+                    android:id="@+id/tvRate"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="8dp"
+                    android:text="1.0x"
+                    android:textColor="#FFFFFF"
+                    android:textSize="14sp"
+                    android:textStyle="bold" />
+            </LinearLayout>
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
+                android:text="Am luong giong doc"
+                android:textColor="#8B949E"
+                android:textSize="12sp" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <SeekBar
+                    android:id="@+id/seekTtsVol"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:max="100"
+                    android:progress="100" />
+
+                <TextView
+                    android:id="@+id/tvTtsVol"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="8dp"
+                    android:text="100%"
+                    android:textColor="#FFFFFF"
+                    android:textSize="14sp"
+                    android:textStyle="bold" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="14dp"
+                android:orientation="horizontal">
+
+                <Button
+                    android:id="@+id/btnFloat"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="🫧  Nut noi"
+                    android:textSize="13sp" />
+
+                <Button
+                    android:id="@+id/btnClearCache"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="8dp"
+                    android:layout_weight="1"
+                    android:text="Xoa cache"
+                    android:textSize="13sp" />
+            </LinearLayout>
+        </LinearLayout>
+    </ScrollView>
+
+    <!-- ===== TAB WEB (chung WebView, khong tai lai khi doi tab) ===== -->
+    <LinearLayout
+        android:id="@+id/paneWeb"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:orientation="vertical"
+        android:visibility="gone">
 
         <LinearLayout
+            android:id="@+id/webBar"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:gravity="center_vertical"
-            android:orientation="horizontal">
+            android:orientation="horizontal"
+            android:padding="8dp">
 
-            <SeekBar
-                android:id="@+id/seekRate"
+            <EditText
+                android:id="@+id/etUrl"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
-                android:max="200"
-                android:progress="50" />
+                android:hint="Nhap link web"
+                android:textColor="#FFFFFF"
+                android:textColorHint="#777777"
+                android:textSize="13sp"
+                android:singleLine="true"
+                android:inputType="textUri"
+                android:background="#222222"
+                android:padding="8dp" />
 
-            <TextView
-                android:id="@+id/tvRate"
+            <Button
+                android:id="@+id/btnGo"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="1.0x"
-                android:textColor="#FFFFFF"
+                android:layout_marginStart="6dp"
+                android:text="Di"
                 android:textSize="12sp" />
         </LinearLayout>
 
-        <Button
-            android:id="@+id/btnOpenWeb"
+        <LinearLayout
+            android:id="@+id/rowPreset"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="12dp"
-            android:text="Mo WebView xem YouTube"
-            android:textSize="14sp" />
+            android:orientation="horizontal"
+            android:paddingLeft="8dp"
+            android:paddingRight="8dp">
 
-        <TextView
-            android:layout_width="wrap_content"
+            <Button
+                android:id="@+id/btnPresetYt"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="YouTube"
+                android:textSize="12sp" />
+
+            <Button
+                android:id="@+id/btnPresetFpt"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="FPT Play"
+                android:textSize="12sp" />
+
+            <Button
+                android:id="@+id/btnPresetTv"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="TV360"
+                android:textSize="12sp" />
+
+            <Button
+                android:id="@+id/btnDesktop"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="Desktop"
+                android:textSize="12sp" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/volBar"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            android:text="Xem Netflix app goc thi bam Play o tren roi thoat sang Netflix, dieu khien bang nut noi."
-            android:textColor="#888888"
-            android:textSize="12sp" />
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingLeft="8dp"
+            android:paddingRight="8dp">
 
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Video:"
+                android:textColor="#CCCCCC"
+                android:textSize="12sp" />
+
+            <SeekBar
+                android:id="@+id/seekVideoVol"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:max="100"
+                android:progress="30" />
+
+            <TextView
+                android:id="@+id/tvVideoVol"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="30%"
+                android:textColor="#FFFFFF"
+                android:textSize="12sp" />
+
+            <Button
+                android:id="@+id/btnMute"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Tat tieng"
+                android:textSize="12sp" />
+
+            <Button
+                android:id="@+id/btnFullscreen"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Phong to"
+                android:textSize="12sp" />
+        </LinearLayout>
+
+        <FrameLayout
+            android:id="@+id/webContainer"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:layout_marginTop="4dp">
+
+            <WebView
+                android:id="@+id/webView"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent" />
+        </FrameLayout>
     </LinearLayout>
-</ScrollView>
+
+</LinearLayout>
