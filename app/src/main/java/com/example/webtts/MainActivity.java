@@ -596,9 +596,6 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    private View videoCustomView;
-    private WebChromeClient.CustomViewCallback videoCustomCb;
-
     private void enterVideoFullscreen(View view,
                                       WebChromeClient.CustomViewCallback cb) {
         if (videoCustomView != null) {
@@ -739,30 +736,5 @@ public class MainActivity extends AppCompatActivity {
         refreshVoiceUi();
         refreshCacheBtn();
         syncUi();
-    }
-
-    private void refreshVoiceUi() {
-        boolean hoaimy = voice == TtsPlaybackService.VOICE_HOAIMY;
-        tvVoiceBadge.setText(hoaimy ? "HoaiMy" : "Google");
-        btnVoiceGoogle.setAlpha(hoaimy ? 0.5f : 1.0f);
-        btnVoiceHoaiMy.setAlpha(hoaimy ? 1.0f : 0.5f);
-    }
-
-    private void refreshCacheBtn() {
-        try {
-            ((Button) findViewById(R.id.btnClearCache))
-                    .setText("🗑  " + TtsPlaybackService.cacheText());
-        } catch (Exception ignored) {}
-    }
-
-    private void syncUi() {
-        if (duration > 0) {
-            seekPos.setProgress((int) (position / duration * 1000));
-        }
-        tvTime.setText(TtsPlaybackService.timeText());
-        int idx = SubtitleParser.findIndex(subs, position);
-        if (idx >= 0 && idx < subs.size()) {
-            tvCue.setText(subs.get(idx).text);
-        }
     }
 }
