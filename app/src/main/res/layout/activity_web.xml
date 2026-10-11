@@ -8,6 +8,7 @@
 
     <!-- Thanh tren: nut Cai dat + o link -->
     <LinearLayout
+        android:id="@+id/webBar"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:gravity="center_vertical"
