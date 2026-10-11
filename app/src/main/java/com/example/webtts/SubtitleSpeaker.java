@@ -236,6 +236,14 @@ public class SubtitleSpeaker {
         }
     }
 
+    /** Cat cau cu, bat buoc doc lai cau tai position ke tiep (dung khi Play/nudge). */
+    public void resetIndex() {
+        try {
+            tts.stop();
+        } catch (Exception ignored) {}
+        currentIndex = -1;
+    }
+
     public int getCurrentIndex() { return currentIndex; }
 
     /**

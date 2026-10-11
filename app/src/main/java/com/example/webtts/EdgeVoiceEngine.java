@@ -206,9 +206,11 @@ public class EdgeVoiceEngine {
 
     /**
      * Doc 1 cau theo slot. Port create_speed_audio Python:
-     * speed = raw/slot kep 1..2.5. Google TTS set rate truc tiep;
-     * Edge mp3 co dinh -> neu raw > slot thi phat nhanh bang
-     * setPlaybackParams (API 23+) hoac bo qua phan du.
+     * speed = raw/slot kep 1..2.5.
+     * FIX tre 1 nhip: prepare() DONG BO truoc (mp3 local ~10-50ms) roi
+     * start() ngay, khong doi prepareAsync callback. Nhu vay tai thoi
+     * diem sub nao la keu cau do, khong tre sang cau sau.
+     * Neu mp3 chua tai xong: tra false de ticker giu cau, preload gap.
      */
     public boolean speak(int index, double slotSec, int stream) {
         List<SubtitleCue> s = subs;
@@ -236,24 +238,20 @@ public class EdgeVoiceEngine {
                 player.setAudioStreamType(stream);
                 player.setDataSource(path);
                 player.setVolume(ttsVol / 100f, ttsVol / 100f);
-                final float sp = speed;
-                player.setOnPreparedListener(mp -> {
-                    try {
-                        if (android.os.Build.VERSION.SDK_INT >= 23
-                                && Math.abs(sp - 1.0f) > 0.01) {
-                            mp.setPlaybackParams(
-                                    mp.getPlaybackParams().setSpeed(sp));
-                        }
-                        mp.start();
-                        if (listener != null) listener.onSpeakStart(index);
-                    } catch (Exception e) {
-                        try { mp.start(); } catch (Exception ignored) {}
+                // prepare dong bo: mp3 local nen nhanh, start ngay.
+                player.prepare();
+                try {
+                    if (android.os.Build.VERSION.SDK_INT >= 23
+                            && Math.abs(speed - 1.0f) > 0.01) {
+                        player.setPlaybackParams(
+                                player.getPlaybackParams().setSpeed(speed));
                     }
-                });
+                } catch (Exception ignored) {}
                 player.setOnCompletionListener(mp -> {
                     if (listener != null) listener.onSpeakDone(index);
                 });
-                player.prepareAsync();
+                player.start();
+                if (listener != null) listener.onSpeakStart(index);
             }
             return true;
         } catch (Exception e) {

@@ -98,6 +98,9 @@ public class TtsPlaybackService extends Service
     private boolean playing = false;
     private double position = 0;
     private double duration = 0;
+    /** Dong ho that (thay position += 0.25): moc he thong khi Play. */
+    private long playStartElapsed = 0;
+    private double playBase = 0;
     private float offset = 0f;
     private float rate = 1.0f;
     private int ttsVol = 100;
@@ -109,7 +112,10 @@ public class TtsPlaybackService extends Service
     private final Runnable ticker = new Runnable() {
         @Override public void run() {
             if (playing && duration > 0) {
-                position += 0.25;
+                // Dong ho he thong (sai so ms), khong cong tay de het lech tich luy.
+                position = playBase
+                        + (android.os.SystemClock.elapsedRealtime()
+                                - playStartElapsed) / 1000.0;
                 if (position >= duration) {
                     position = duration;
                     setPlaying(false);
@@ -118,7 +124,7 @@ public class TtsPlaybackService extends Service
                 updateNotif();
             }
             refreshFloatTime();
-            handler.postDelayed(this, 250);
+            handler.postDelayed(this, 100);
         }
     };
 
@@ -360,6 +366,14 @@ public class TtsPlaybackService extends Service
             updateNotif();
             return;
         }
+        if (p && !playing) {
+            // Bam Play: chot moc gio that (het lech tich luy).
+            syncClock();
+        }
+        if (!p && playing) {
+            // Bam Pause: dong bang position theo dong ho that.
+            position = clockNow();
+        }
         playing = p;
         if (speaker != null) speaker.setPlaying(p);
         if (edge != null) edge.setPlaying(p);
@@ -369,7 +383,10 @@ public class TtsPlaybackService extends Service
             }
             if (edge != null) edge.stopPlayer();
         } else {
-            // Bam Play: preload ngay 35 cau HoaiMy (port _preload_initial).
+            // Bam Play: cat cau cu + preload ngay 35 cau HoaiMy.
+            if (speaker != null) speaker.resetIndex();
+            if (edge != null) edge.stopPlayer();
+            driveEngines();
             if (voice == VOICE_HOAIMY && edge != null) {
                 int idx = SubtitleParser.findIndex(sharedSubs, position + offset);
                 if (idx < 0) idx = 0;
@@ -380,15 +397,33 @@ public class TtsPlaybackService extends Service
         updateNotif();
     }
 
+    /** Chot moc: gio = position hien tai, dem tu bay gio. */
+    private void syncClock() {
+        playBase = position;
+        playStartElapsed = android.os.SystemClock.elapsedRealtime();
+    }
+
+    /** Gio that hien tai theo moc (dung khi Pause/nudge). */
+    private double clockNow() {
+        if (!playing) return position;
+        return playBase + (android.os.SystemClock.elapsedRealtime()
+                - playStartElapsed) / 1000.0;
+    }
+
     private void nudge(double delta) {
-        position += delta;
+        // Nudge theo dong ho that + chot moc lai de khong troi gio.
+        double now = playing ? clockNow() : position;
+        position = now + delta;
         if (position < 0) position = 0;
         if (duration > 0 && position > duration) position = duration;
+        if (playing) syncClock();
         if (voice == VOICE_HOAIMY && edge != null) {
             edge.stopPlayer();
             int idx = SubtitleParser.findIndex(sharedSubs, position + offset);
             if (idx >= 0) edge.preloadFrom(idx);
+            driveEngines();
         } else if (speaker != null) {
+            speaker.resetIndex();
             speaker.onPosition(position);
         }
         refreshFloatTime();
@@ -509,12 +544,18 @@ public class TtsPlaybackService extends Service
     public static void setPosition(double pos) {
         if (running != null) {
             running.position = pos;
-            if (running.speaker != null) running.speaker.onPosition(pos);
+            // Seek tu Activity/WebView: chot moc lai + cat cau cu.
+            if (running.playing) running.syncClock();
+            if (running.speaker != null) running.speaker.resetIndex();
+            if (running.edge != null) running.edge.stopPlayer();
+            running.driveEngines();
         }
     }
 
     public static double getPosition() {
-        return running != null ? running.position : 0;
+        if (running == null) return 0;
+        // Tra gio that (dung cho UI), khong phai bien position cu.
+        return running.playing ? running.clockNow() : running.position;
     }
 
     // ----- nut noi -----
