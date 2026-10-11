@@ -1,112 +1,270 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- V1.2: UI gon lai theo phan hoi user.
+  - Phan TTS len tren (chon sub / cau hien tai / offset / toc do).
+  - Phan web xuong duoi: o nhap link + nut Di + preset + volume video + fullscreen.
+  - WebView chiem phan con lai, co the phong to bang nut fullscreen. -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/rootLayout"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
     android:background="#111111"
-    android:padding="12dp">
+    android:padding="10dp">
 
-    <TextView
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="Web TTS — Doc phu de tieng Viet"
-        android:textColor="#FFFFFF"
-        android:textSize="18sp"
-        android:textStyle="bold" />
-
-    <TextView
-        android:id="@+id/tvStatus"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="4dp"
-        android:text="Chua co phu de — chon .srt hoac mo WebView"
-        android:textColor="#888888"
-        android:textSize="13sp" />
-
+    <!-- ===== Cum TTS (gon) ===== -->
     <LinearLayout
+        android:id="@+id/ttsPanel"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="8dp"
+        android:orientation="vertical">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Web TTS — Doc phu de tieng Viet"
+            android:textColor="#FFFFFF"
+            android:textSize="17sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/tvStatus"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="2dp"
+            android:text="Chua co phu de — chon .srt ben duoi"
+            android:textColor="#888888"
+            android:textSize="12sp" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:orientation="horizontal">
+
+            <Button
+                android:id="@+id/btnPickSrt"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="Chon .srt"
+                android:textSize="13sp" />
+
+            <Button
+                android:id="@+id/btnPlayPause"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="Play"
+                android:textSize="13sp" />
+        </LinearLayout>
+
+        <TextView
+            android:id="@+id/tvCue"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:minHeight="48dp"
+            android:maxLines="3"
+            android:ellipsize="end"
+            android:text="..."
+            android:textColor="#FFFFFF"
+            android:textSize="15sp" />
+
+        <SeekBar
+            android:id="@+id/seekPos"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content" />
+
+        <!-- Offset gon: 1 hang ngang cuon duoc thay cho grid 3 cot -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Offset dong bo:"
+            android:textColor="#CCCCCC"
+            android:textSize="12sp" />
+
+        <HorizontalScrollView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:scrollbars="none">
+
+            <LinearLayout
+                android:id="@+id/rowOffset"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal" />
+        </HorizontalScrollView>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Toc do:"
+                android:textColor="#CCCCCC"
+                android:textSize="12sp" />
+
+            <SeekBar
+                android:id="@+id/seekRate"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:max="200"
+                android:progress="50" />
+
+            <TextView
+                android:id="@+id/tvRate"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="1.0x"
+                android:textColor="#FFFFFF"
+                android:textSize="12sp" />
+        </LinearLayout>
+    </LinearLayout>
+
+    <!-- ===== Cum WEB ===== -->
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:layout_marginTop="6dp"
+        android:background="#333333" />
+
+    <LinearLayout
+        android:id="@+id/webBar"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="6dp"
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
+
+        <EditText
+            android:id="@+id/etUrl"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:hint="Nhap link web (youtube, netflix, ...)"
+            android:textColor="#FFFFFF"
+            android:textColorHint="#777777"
+            android:textSize="13sp"
+            android:singleLine="true"
+            android:inputType="textUri"
+            android:background="#222222"
+            android:padding="8dp" />
+
+        <Button
+            android:id="@+id/btnGo"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="6dp"
+            android:text="Di"
+            android:textSize="13sp" />
+    </LinearLayout>
+
+    <!-- Hang preset trang nhanh -->
+    <LinearLayout
+        android:id="@+id/rowPreset"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="4dp"
         android:orientation="horizontal">
 
         <Button
-            android:id="@+id/btnPickSrt"
+            android:id="@+id/btnPresetYt"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:text="Chon .srt" />
+            android:text="YouTube"
+            android:textSize="12sp" />
 
         <Button
-            android:id="@+id/btnPlayPause"
+            android:id="@+id/btnPresetNf"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:text="Play" />
+            android:text="Netflix"
+            android:textSize="12sp" />
+
+        <Button
+            android:id="@+id/btnPresetFpt"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="FPT Play"
+            android:textSize="12sp" />
+
+        <Button
+            android:id="@+id/btnPresetTv"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="TV360"
+            android:textSize="12sp" />
     </LinearLayout>
 
-    <TextView
-        android:id="@+id/tvCue"
+    <!-- Am luong video goc + fullscreen -->
+    <LinearLayout
+        android:id="@+id/volBar"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="8dp"
-        android:minHeight="64dp"
-        android:text="..."
-        android:textColor="#FFFFFF"
-        android:textSize="16sp" />
+        android:layout_marginTop="4dp"
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
 
-    <SeekBar
-        android:id="@+id/seekPos"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content" />
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Video goc:"
+            android:textColor="#CCCCCC"
+            android:textSize="12sp" />
 
-    <TextView
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="Offset dong bo (giong ban Python):"
-        android:textColor="#CCCCCC"
-        android:textSize="13sp" />
+        <SeekBar
+            android:id="@+id/seekVideoVol"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:max="100"
+            android:progress="30" />
 
-    <GridLayout
-        android:id="@+id/gridOffset"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:columnCount="3" />
+        <TextView
+            android:id="@+id/tvVideoVol"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="30%"
+            android:textColor="#FFFFFF"
+            android:textSize="12sp" />
 
-    <TextView
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="6dp"
-        android:text="Toc do doc:"
-        android:textColor="#CCCCCC"
-        android:textSize="13sp" />
+        <Button
+            android:id="@+id/btnMute"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Tat tieng"
+            android:textSize="12sp" />
 
-    <SeekBar
-        android:id="@+id/seekRate"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:max="200"
-        android:progress="50" />
+        <Button
+            android:id="@+id/btnFullscreen"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Phong to"
+            android:textSize="12sp" />
+    </LinearLayout>
 
-    <TextView
-        android:id="@+id/tvRate"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="1.0x"
-        android:textColor="#FFFFFF"
-        android:textSize="13sp" />
-
-    <Button
-        android:id="@+id/btnOpenWeb"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="8dp"
-        android:text="Mo WebView xem video" />
-
-    <WebView
-        android:id="@+id/webView"
+    <!-- Khung video: co the an cum TTS de phong to khi fullscreen -->
+    <FrameLayout
+        android:id="@+id/webContainer"
         android:layout_width="match_parent"
         android:layout_height="0dp"
         android:layout_weight="1"
-        android:layout_marginTop="8dp" />
+        android:layout_marginTop="6dp">
+
+        <WebView
+            android:id="@+id/webView"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent" />
+    </FrameLayout>
 
 </LinearLayout>

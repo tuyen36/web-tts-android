@@ -6,19 +6,24 @@ import android.app.Activity;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
+import android.content.res.Configuration;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.speech.tts.TextToSpeech;
+import android.view.View;
+import android.view.WindowManager;
 import android.webkit.JavascriptInterface;
 import android.webkit.WebChromeClient;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.Button;
-import android.widget.GridLayout;
+import android.widget.EditText;
+import android.widget.FrameLayout;
+import android.widget.LinearLayout;
 import android.widget.SeekBar;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -33,19 +38,16 @@ import java.util.List;
 import java.util.Locale;
 
 /**
- * Man hinh chinh Web TTS Android.
+ * V1.2: UI gon + da trang web + fullscreen + volume video goc.
  *
- * 2 che do chay (tuong ung 2 che do Python):
- * 1. THU CONG (khuyen dung truoc): chon file .srt -> bam Play ->
- *    SeekBar dong vai tro timeline video -> SubtitleSpeaker doc theo.
- *    Giong cua so Dieu khien + ask_srt_manual() ban Python.
- * 2. WEBVIEW (thu nghiem): mo trang video trong WebView cua app,
- *    JS hook video.currentTime + paused -> SubtitleSpeaker doc theo.
- *    Khong can Kiwi. Sub van nap thu cong (.srt) o giai doan 1.
+ * 1. THU CONG: chon .srt -> Play -> SeekBar nhu timeline.
+ * 2. WEBVIEW: nhap link bat ky (YouTube / Netflix web / FPT / TV360...)
+ *    hoac bam preset -> JS hook video.currentTime + paused.
+ *    Phu de van nap thu cong (.srt).
  *
- * Khong ket noi thang vao app Netflix: Android khong cho app thu 3
- * doc position/sub tu app Netflix (sandbox + DRM). Giai phap thuc te:
- * mo Netflix tren trinh duyet trong WebView + nap sub thu cong.
+ * Ghi chu am thanh: TTS he thong va video WebView la 2 stream doc lap.
+ * Khong giam truc tiep volume cua <video> tu Java, nhung co the
+ * dat video.volume / muted qua JS. Mac dinh video 30% de giong doc noi.
  */
 public class MainActivity extends AppCompatActivity
         implements TextToSpeech.OnInitListener {
@@ -57,6 +59,11 @@ public class MainActivity extends AppCompatActivity
     private static final float[] OFFSETS =
             {2.0f, 1.5f, 1.0f, 0.5f, 0.0f, -0.5f, -1.0f};
 
+    private static final String PRESET_YT = "https://www.youtube.com/";
+    private static final String PRESET_NF = "https://www.netflix.com/browse";
+    private static final String PRESET_FPT = "https://fptplay.vn/";
+    private static final String PRESET_TV360 = "https://tv360.vn/";
+
     private TextToSpeech tts;
     private SubtitleSpeaker speaker;
     private List<SubtitleCue> subs = new ArrayList<>();
@@ -64,10 +71,20 @@ public class MainActivity extends AppCompatActivity
     private TextView tvStatus;
     private TextView tvCue;
     private TextView tvRate;
+    private TextView tvVideoVol;
     private Button btnPlayPause;
+    private Button btnMute;
+    private Button btnFullscreen;
     private SeekBar seekPos;
     private SeekBar seekRate;
-    private GridLayout gridOffset;
+    private SeekBar seekVideoVol;
+    private LinearLayout rowOffset;
+    private LinearLayout ttsPanel;
+    private LinearLayout webBar;
+    private LinearLayout rowPreset;
+    private LinearLayout volBar;
+    private EditText etUrl;
+    private FrameLayout webContainer;
     private WebView webView;
 
     private boolean playing = false;
@@ -76,6 +93,9 @@ public class MainActivity extends AppCompatActivity
     private double duration = 0;   // giay (max end cue)
     private float offset = 0f;
     private float rate = 1.0f;
+    private int videoVol = 30;     // % am luong video goc
+    private boolean videoMuted = false;
+    private boolean fullscreen = false;
 
     private final Handler handler = new Handler(Looper.getMainLooper());
     private final Runnable ticker = new Runnable() {
@@ -102,26 +122,52 @@ public class MainActivity extends AppCompatActivity
         tvStatus = findViewById(R.id.tvStatus);
         tvCue = findViewById(R.id.tvCue);
         tvRate = findViewById(R.id.tvRate);
+        tvVideoVol = findViewById(R.id.tvVideoVol);
         btnPlayPause = findViewById(R.id.btnPlayPause);
+        btnMute = findViewById(R.id.btnMute);
+        btnFullscreen = findViewById(R.id.btnFullscreen);
         seekPos = findViewById(R.id.seekPos);
         seekRate = findViewById(R.id.seekRate);
-        gridOffset = findViewById(R.id.gridOffset);
+        seekVideoVol = findViewById(R.id.seekVideoVol);
+        rowOffset = findViewById(R.id.rowOffset);
+        ttsPanel = findViewById(R.id.ttsPanel);
+        webBar = findViewById(R.id.webBar);
+        rowPreset = findViewById(R.id.rowPreset);
+        volBar = findViewById(R.id.volBar);
+        etUrl = findViewById(R.id.etUrl);
+        webContainer = findViewById(R.id.webContainer);
         webView = findViewById(R.id.webView);
 
         SharedPreferences sp =
                 getSharedPreferences("webtts", MODE_PRIVATE);
         offset = sp.getFloat("offset", 0f);
         rate = sp.getFloat("rate", 1.0f);
+        videoVol = sp.getInt("videoVol", 30);
+        String lastUrl = sp.getString("lastUrl", PRESET_YT);
+        etUrl.setText(lastUrl);
 
         tts = new TextToSpeech(this, this);
 
-        buildOffsetGrid();
+        buildOffsetRow();
         seekRate.setProgress(Math.round((rate - 0.5f) / 2.0f * 200));
         tvRate.setText(String.format(Locale.US, "%.1fx", rate));
+        seekVideoVol.setProgress(videoVol);
+        tvVideoVol.setText(videoVol + "%");
+        refreshMuteBtn();
 
         findViewById(R.id.btnPickSrt).setOnClickListener(v -> pickSrt());
         btnPlayPause.setOnClickListener(v -> setPlaying(!playing));
-        findViewById(R.id.btnOpenWeb).setOnClickListener(v -> openWeb());
+        findViewById(R.id.btnGo).setOnClickListener(v -> goUrl());
+        findViewById(R.id.btnPresetYt).setOnClickListener(
+                v -> openPreset(PRESET_YT));
+        findViewById(R.id.btnPresetNf).setOnClickListener(
+                v -> openPreset(PRESET_NF));
+        findViewById(R.id.btnPresetFpt).setOnClickListener(
+                v -> openPreset(PRESET_FPT));
+        findViewById(R.id.btnPresetTv).setOnClickListener(
+                v -> openPreset(PRESET_TV360));
+        btnMute.setOnClickListener(v -> toggleMute());
+        btnFullscreen.setOnClickListener(v -> toggleFullscreen());
 
         seekPos.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
             @Override public void onProgressChanged(SeekBar s, int p, boolean fromUser) {
@@ -145,16 +191,34 @@ public class MainActivity extends AppCompatActivity
             @Override public void onStartTrackingTouch(SeekBar s) {}
             @Override public void onStopTrackingTouch(SeekBar s) {}
         });
+        seekVideoVol.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            @Override public void onProgressChanged(SeekBar s, int p, boolean fromUser) {
+                videoVol = p;
+                tvVideoVol.setText(p + "%");
+                sp.edit().putInt("videoVol", p).apply();
+                if (fromUser) {
+                    if (p > 0 && videoMuted) {
+                        videoMuted = false;
+                        refreshMuteBtn();
+                    }
+                    applyVideoVolume();
+                }
+            }
+            @Override public void onStartTrackingTouch(SeekBar s) {}
+            @Override public void onStopTrackingTouch(SeekBar s) {}
+        });
 
         // WebView: doc currentTime tu <video> dau tien tren trang.
         WebSettings ws = webView.getSettings();
         ws.setJavaScriptEnabled(true);
         ws.setDomStorageEnabled(true);
         ws.setMediaPlaybackRequiresUserGesture(false);
+        // Cho fullscreen video HTML5 (vimeo/player mot so trang can).
         webView.setWebChromeClient(new WebChromeClient());
         webView.setWebViewClient(new WebViewClient() {
             @Override public void onPageFinished(WebView view, String url) {
                 injectHook();
+                applyVideoVolume();
             }
         });
         webView.addJavascriptInterface(new VideoBridge(), "WebTTS");
@@ -305,59 +369,183 @@ public class MainActivity extends AppCompatActivity
 
     private int lastShown = -2;
 
-    // ---------- offset grid ----------
+    // ---------- offset row (1 hang cuon ngang) ----------
 
-    private void buildOffsetGrid() {
-        gridOffset.removeAllViews();
+    private void buildOffsetRow() {
+        rowOffset.removeAllViews();
         for (float v : OFFSETS) {
             Button b = new Button(this);
             String sign = v > 0 ? "+" : "";
             b.setText(sign + String.format(Locale.US, "%.1fs", v));
+            b.setTextSize(12);
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.WRAP_CONTENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT);
+            lp.setMargins(2, 0, 2, 0);
+            b.setLayoutParams(lp);
+            final float val = v;
             b.setOnClickListener(view -> {
-                offset = v;
-                if (speaker != null) speaker.setAudioOffset(v);
-                TtsPlaybackService.setSharedOffset(v);
+                offset = val;
+                if (speaker != null) speaker.setAudioOffset(val);
+                TtsPlaybackService.setSharedOffset(val);
                 getSharedPreferences("webtts", MODE_PRIVATE)
-                        .edit().putFloat("offset", v).apply();
-                buildOffsetGrid();
-                toast("Offset " + sign + v + "s");
+                        .edit().putFloat("offset", val).apply();
+                buildOffsetRow();
+                toast("Offset " + sign + val + "s");
             });
             if (Math.abs(v - offset) < 0.01) {
                 b.setBackgroundColor(0xFF4CAF50);
             }
-            gridOffset.addView(b);
+            rowOffset.addView(b);
         }
     }
 
-    // ---------- WebView ----------
+    // ---------- WebView da trang ----------
 
-    private void openWeb() {
-        String url = "https://www.youtube.com/";
+    private void goUrl() {
+        String raw = etUrl.getText().toString().trim();
+        if (raw.isEmpty()) {
+            toast("Nhap link trang web truoc.");
+            return;
+        }
+        String url = raw;
+        if (!url.startsWith("http://") && !url.startsWith("https://")) {
+            url = "https://" + url;
+        }
+        etUrl.setText(url);
+        getSharedPreferences("webtts", MODE_PRIVATE)
+                .edit().putString("lastUrl", url).apply();
         webView.loadUrl(url);
-        toast("Mo YouTube trong app. Phu de van nap thu cong (.srt).");
+    }
+
+    private void openPreset(String url) {
+        etUrl.setText(url);
+        getSharedPreferences("webtts", MODE_PRIVATE)
+                .edit().putString("lastUrl", url).apply();
+        webView.loadUrl(url);
     }
 
     private void injectHook() {
-        // Poll video dau tien moi 250ms, day ve Java.
+        // Hook moi <video> tren trang (khong chi video dau tien):
+        // poll 250ms + bat su kien play/pause/seeked de dong bo nhanh.
+        // Giu lastHooked de biet trang nao chua hook (SPA doi video khong load lai).
         String js = "(function(){"
-                + "if(window._webttsHook)return;window._webttsHook=true;"
-                + "setInterval(function(){"
-                + "var v=document.querySelector('video');"
-                + "if(!v)return;"
-                + "try{WebTTS.onProgress(v.currentTime||0,!v.paused);}catch(e){}"
+                + "if(window._webttsTimer)clearInterval(window._webttsTimer);"
+                + "window._webttsHook=false;"
+                + "function vids(){return document.querySelectorAll('video');}"
+                + "function best(){var vs=vids();if(!vs||!vs.length)return null;"
+                + "var b=vs[0];for(var i=0;i<vs.length;i++){"
+                + "if(!vs[i].paused){b=vs[i];break;}"
+                + "if((vs[i].clientWidth||0)>(b.clientWidth||0))b=vs[i];}return b;}"
+                + "function applyVol(){"
+                + "try{var vs=vids();for(var i=0;i<vs.length;i++){"
+                + "vs[i].volume=" + (videoVol / 100.0) + ";"
+                + "vs[i].muted=" + (videoMuted ? "true" : "false") + ";"
+                + "}}catch(e){}}"
+                + "window._webttsApplyVol=applyVol;applyVol();"
+                + "window._webttsTimer=setInterval(function(){"
+                + "var v=best();if(!v)return;"
+                + "try{WebTTS.onProgress(v.currentTime||0,!v.paused,v.duration||0);}catch(e){}"
                 + "},250);})();";
         try {
             webView.evaluateJavascript(js, null);
         } catch (Exception ignored) {}
     }
 
+    /** Dat volume/mute cho moi <video> tren trang. */
+    private void applyVideoVolume() {
+        String js = "(function(){"
+                + "if(window._webttsApplyVol){try{window._webttsApplyVol();}catch(e){}}"
+                + "try{var vs=document.querySelectorAll('video');"
+                + "for(var i=0;i<vs.length;i++){"
+                + "vs[i].volume=" + (videoVol / 100.0) + ";"
+                + "vs[i].muted=" + (videoMuted ? "true" : "false") + ";"
+                + "}}catch(e){}})();";
+        try {
+            webView.evaluateJavascript(js, null);
+        } catch (Exception ignored) {}
+    }
+
+    private void toggleMute() {
+        videoMuted = !videoMuted;
+        refreshMuteBtn();
+        applyVideoVolume();
+        toast(videoMuted ? "Da tat tieng video goc." : "Da mo tieng video goc.");
+    }
+
+    private void refreshMuteBtn() {
+        btnMute.setText(videoMuted ? "Mo tieng" : "Tat tieng");
+    }
+
+    /** Fullscreen: an cum TTS + thanh trang de video chiem het man hinh. */
+    private void toggleFullscreen() {
+        fullscreen = !fullscreen;
+        int gone = fullscreen ? View.GONE : View.VISIBLE;
+        ttsPanel.setVisibility(gone);
+        webBar.setVisibility(gone);
+        rowPreset.setVisibility(gone);
+        volBar.setVisibility(gone);
+        btnFullscreen.setText(fullscreen ? "Thu nho" : "Phong to");
+        if (fullscreen) {
+            getWindow().addFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN);
+            try {
+                setRequestedOrientation(
+                        android.content.pm.ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE);
+            } catch (Exception ignored) {}
+            toast("Che do phong to — bam Thu nho de ve.");
+        } else {
+            getWindow().clearFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN);
+            try {
+                setRequestedOrientation(
+                        android.content.pm.ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED);
+            } catch (Exception ignored) {}
+        }
+    }
+
+    @Override
+    public void onConfigurationChanged(Configuration newConfig) {
+        super.onConfigurationChanged(newConfig);
+        // Khong lam gi dac biet: layout tu gian.
+    }
+
+    @Override
+    public void onBackPressed() {
+        if (fullscreen) {
+            toggleFullscreen();
+            return;
+        }
+        if (webView.canGoBack()) {
+            webView.goBack();
+            return;
+        }
+        super.onBackPressed();
+    }
+
     private class VideoBridge {
         @JavascriptInterface
         public void onProgress(final double time, final boolean playingNow) {
+            onProgress(time, playingNow, 0);
+        }
+
+        @JavascriptInterface
+        public void onProgress(final double time, final boolean playingNow,
+                               final double webDur) {
             runOnUiThread(() -> {
                 position = time;
-                if (playingNow != playing) setPlaying(playingNow);
-                else pushToSpeaker();
+                if (webDur > 0 && (duration <= 0 || Math.abs(webDur - duration) > 5)) {
+                    // Neu chua co sub, lay duration tu video de SeekBar chay duoc.
+                    if (subs.isEmpty()) duration = webDur;
+                }
+                if (playingNow != playing) {
+                    // Chi tu bat/tat khi da co sub; khong co sub thi giu nut tay.
+                    if (!subs.isEmpty()) setPlaying(playingNow);
+                    else {
+                        playing = playingNow;
+                        btnPlayPause.setText(playing ? "Pause" : "Play");
+                    }
+                } else {
+                    pushToSpeaker();
+                }
                 syncUi();
             });
         }
