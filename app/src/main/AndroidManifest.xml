@@ -8,6 +8,8 @@
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <!-- Android 13+ can hien thong bao foreground service -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- V1.4: nut noi dieu khien tren app Netflix goc -->
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
 
     <application
         android:allowBackup="true"

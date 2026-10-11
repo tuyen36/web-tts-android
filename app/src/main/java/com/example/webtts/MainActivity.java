@@ -12,9 +12,7 @@ import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
-import android.speech.tts.TextToSpeech;
-import android.view.View;
-import android.view.WindowManager;
+import android.provider.Settings;
 import android.webkit.JavascriptInterface;
 import android.webkit.WebChromeClient;
 import android.webkit.WebSettings;
@@ -36,24 +34,24 @@ import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.Timer;
+import java.util.TimerTask;
 
 /**
- * V1.2: UI gon + da trang web + fullscreen + volume video goc.
+ * V1.4: che do chay SONG SONG app Netflix goc.
  *
- * 1. THU CONG: chon .srt -> Play -> SeekBar nhu timeline.
- * 2. WEBVIEW: nhap link bat ky (YouTube / Netflix web / FPT / TV360...)
- *    hoac bam preset -> JS hook video.currentTime + paused.
- *    Phu de van nap thu cong (.srt).
- *
- * Ghi chu am thanh: TTS he thong va video WebView la 2 stream doc lap.
- * Khong giam truc tiep volume cua <video> tu Java, nhung co the
- * dat video.volume / muted qua JS. Mac dinh video 30% de giong doc noi.
+ * - TTS + SubtitleSpeaker nam TRONG TtsPlaybackService (doc nen that).
+ *   Activity KHONG tao TTS rieng -> khong trung giong.
+ * - Activity: nap .srt -> bam Play -> service doc nen -> thoat sang
+ *   Netflix xem binh thuong. Nut noi mo 50% dieu khien tu Netflix.
+ * - Giu WebView de xem YouTube nhu cu (hook currentTime day ve service).
+ * - Xin quyen overlay 1 lan de hien nut noi tren app khac.
  */
-public class MainActivity extends AppCompatActivity
-        implements TextToSpeech.OnInitListener {
+public class MainActivity extends AppCompatActivity {
 
     private static final int REQ_SRT = 1001;
     private static final int REQ_NOTIF = 1002;
+    private static final int REQ_OVERLAY = 1003;
 
     // Port tu AUDIO_OFFSET_OPTIONS Python.
     private static final float[] OFFSETS =
@@ -64,20 +62,21 @@ public class MainActivity extends AppCompatActivity
     private static final String PRESET_FPT = "https://fptplay.vn/";
     private static final String PRESET_TV360 = "https://tv360.vn/";
 
-    private TextToSpeech tts;
-    private SubtitleSpeaker speaker;
     private List<SubtitleCue> subs = new ArrayList<>();
 
     private TextView tvStatus;
     private TextView tvCue;
     private TextView tvRate;
     private TextView tvVideoVol;
+    private TextView tvTtsVol;
     private Button btnPlayPause;
+    private Button btnFloat;
     private Button btnMute;
     private Button btnFullscreen;
     private SeekBar seekPos;
     private SeekBar seekRate;
     private SeekBar seekVideoVol;
+    private SeekBar seekTtsVol;
     private LinearLayout rowOffset;
     private LinearLayout ttsPanel;
     private LinearLayout webBar;
@@ -88,33 +87,19 @@ public class MainActivity extends AppCompatActivity
     private WebView webView;
 
     private boolean playing = false;
-    private boolean ttsReady = false;
-    private double position = 0;   // giay
+    private double position = 0;   // giay (che do thu cong / webview)
     private double duration = 0;   // giay (max end cue)
     private float offset = 0f;
     private float rate = 1.0f;
-    private int videoVol = 30;     // % am luong video goc
+    private int videoVol = 30;     // % am luong video WebView
+    private int ttsVol = 100;      // % volume giong doc sub
     private boolean videoMuted = false;
     private boolean fullscreen = false;
-    /** Gia desktop de Netflix khong ep mo app goc. Mac dinh BAT. */
+    /** Gia desktop de Netflix web khong ep mo app goc. Mac dinh BAT. */
     private boolean desktopMode = true;
     private Button btnDesktop;
 
-    private final Handler handler = new Handler(Looper.getMainLooper());
-    private final Runnable ticker = new Runnable() {
-        @Override public void run() {
-            if (playing && duration > 0) {
-                position += 0.25;
-                if (position >= duration) {
-                    position = duration;
-                    setPlaying(false);
-                }
-                syncUi();
-                pushToSpeaker();
-            }
-            handler.postDelayed(this, 250);
-        }
-    };
+    private Timer uiTimer;
 
     @SuppressLint({"SetJavaScriptEnabled", "AddJavascriptInterface"})
     @Override
@@ -141,26 +126,50 @@ public class MainActivity extends AppCompatActivity
         webContainer = findViewById(R.id.webContainer);
         webView = findViewById(R.id.webView);
 
+        // Hang volume giong doc (them bang code de khoi sua layout lon).
+        tvTtsVol = new TextView(this);
+        tvTtsVol.setText("Sub 100%");
+        tvTtsVol.setTextColor(0xFFFFFFFF);
+        tvTtsVol.setTextSize(12);
+        seekTtsVol = new SeekBar(this);
+        seekTtsVol.setMax(100);
+        LinearLayout rateRow = (LinearLayout) seekRate.getParent();
+        rateRow.addView(tvTtsVol);
+        rateRow.addView(seekTtsVol);
+        LinearLayout.LayoutParams ttsLp = new LinearLayout.LayoutParams(
+                0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
+        seekTtsVol.setLayoutParams(ttsLp);
+
+        // Nut mo nut noi (them canh nut Play).
+        btnFloat = new Button(this);
+        btnFloat.setText("Nut noi");
+        btnFloat.setTextSize(12);
+        LinearLayout playRow = (LinearLayout) btnPlayPause.getParent();
+        playRow.addView(btnFloat);
+
         SharedPreferences sp =
                 getSharedPreferences("webtts", MODE_PRIVATE);
         offset = sp.getFloat("offset", 0f);
         rate = sp.getFloat("rate", 1.0f);
         videoVol = sp.getInt("videoVol", 30);
+        ttsVol = sp.getInt("ttsVol", 100);
         desktopMode = sp.getBoolean("desktopMode", true);
         String lastUrl = sp.getString("lastUrl", PRESET_YT);
         etUrl.setText(lastUrl);
-
-        tts = new TextToSpeech(this, this);
 
         buildOffsetRow();
         seekRate.setProgress(Math.round((rate - 0.5f) / 2.0f * 200));
         tvRate.setText(String.format(Locale.US, "%.1fx", rate));
         seekVideoVol.setProgress(videoVol);
         tvVideoVol.setText(videoVol + "%");
+        seekTtsVol.setProgress(ttsVol);
+        tvTtsVol.setText("Sub " + ttsVol + "%");
         refreshMuteBtn();
+        refreshPlayBtn();
 
         findViewById(R.id.btnPickSrt).setOnClickListener(v -> pickSrt());
         btnPlayPause.setOnClickListener(v -> setPlaying(!playing));
+        btnFloat.setOnClickListener(v -> ensureFloat());
         findViewById(R.id.btnGo).setOnClickListener(v -> goUrl());
         findViewById(R.id.btnPresetYt).setOnClickListener(
                 v -> openPreset(PRESET_YT));
@@ -180,7 +189,7 @@ public class MainActivity extends AppCompatActivity
             @Override public void onProgressChanged(SeekBar s, int p, boolean fromUser) {
                 if (fromUser && duration > 0) {
                     position = duration * p / 1000.0;
-                    pushToSpeaker();
+                    TtsPlaybackService.setPosition(position);
                     syncUi();
                 }
             }
@@ -191,9 +200,18 @@ public class MainActivity extends AppCompatActivity
             @Override public void onProgressChanged(SeekBar s, int p, boolean fromUser) {
                 rate = 0.5f + p / 200.0f * 2.0f;
                 tvRate.setText(String.format(Locale.US, "%.1fx", rate));
-                if (speaker != null) speaker.setSpeechRate(rate);
-                TtsPlaybackService.setSharedRate(rate);
+                TtsPlaybackService.setRate(rate);
                 sp.edit().putFloat("rate", rate).apply();
+            }
+            @Override public void onStartTrackingTouch(SeekBar s) {}
+            @Override public void onStopTrackingTouch(SeekBar s) {}
+        });
+        seekTtsVol.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            @Override public void onProgressChanged(SeekBar s, int p, boolean fromUser) {
+                ttsVol = p;
+                tvTtsVol.setText("Sub " + p + "%");
+                TtsPlaybackService.setTtsVolume(p);
+                sp.edit().putInt("ttsVol", p).apply();
             }
             @Override public void onStartTrackingTouch(SeekBar s) {}
             @Override public void onStopTrackingTouch(SeekBar s) {}
@@ -215,7 +233,7 @@ public class MainActivity extends AppCompatActivity
             @Override public void onStopTrackingTouch(SeekBar s) {}
         });
 
-        // WebView: gia desktop + doc currentTime tu <video>.
+        // WebView YouTube: gia desktop + hook currentTime day ve service.
         WebSettings ws = webView.getSettings();
         ws.setJavaScriptEnabled(true);
         ws.setDomStorageEnabled(true);
@@ -224,7 +242,6 @@ public class MainActivity extends AppCompatActivity
         ws.setUseWideViewPort(true);
         ws.setSupportMultipleWindows(false);
         applyDesktopMode(ws);
-        // Cho fullscreen video HTML5 (vimeo/player mot so trang can).
         webView.setWebChromeClient(new WebChromeClient());
         webView.setWebViewClient(new WebViewClient() {
             @Override public void onPageFinished(WebView view, String url) {
@@ -234,46 +251,33 @@ public class MainActivity extends AppCompatActivity
         });
         webView.addJavascriptInterface(new VideoBridge(), "WebTTS");
 
-        handler.post(ticker);
+        // Poll trang thai service de refresh nut Play + cau hien tai.
+        uiTimer = new Timer();
+        uiTimer.schedule(new TimerTask() {
+            @Override public void run() {
+                runOnUiThread(() -> {
+                    boolean p = TtsPlaybackService.isPlayingNow();
+                    if (p != playing) {
+                        playing = p;
+                        refreshPlayBtn();
+                    }
+                    String cue = TtsPlaybackService.currentCueText();
+                    if (cue != null && !cue.equals(tvCue.getText().toString())) {
+                        tvCue.setText(cue);
+                    }
+                    double sp2 = TtsPlaybackService.getPosition();
+                    if (duration > 0 && Math.abs(sp2 - position) > 0.6) {
+                        position = sp2;
+                        syncUi();
+                    }
+                });
+            }
+        }, 500, 500);
+
         askNotif();
     }
 
-    @Override
-    public void onInit(int status) {
-        if (status == TextToSpeech.SUCCESS) {
-            try {
-                tts.setLanguage(new Locale("vi", "VN"));
-            } catch (Exception ignored) {}
-            ttsReady = true;
-            speaker = new SubtitleSpeaker(tts, new SubtitleSpeaker.Listener() {
-                @Override public void onSpeakStart(int index) {
-                    runOnUiThread(() -> highlight(index));
-                }
-                @Override public void onSpeakDone(int index) {}
-                @Override public void onTtsError(int index) {
-                    runOnUiThread(() -> toast("TTS loi cau " + (index + 1)));
-                }
-            });
-            // Hien toc do thuc te (co the > muc user chon khi gap cau dai).
-            speaker.setRateDisplay(new SubtitleSpeaker.RateDisplay() {
-                @Override public void onRate(float eff) {
-                    runOnUiThread(() -> tvRate.setText(
-                        String.format(Locale.US, "%.1fx (cau nay %.1fx)",
-                            rate, eff)));
-                }
-            });
-            speaker.setSubtitles(subs);
-            speaker.setAudioOffset(offset);
-            speaker.setSpeechRate(rate);
-            TtsPlaybackService.setSharedSubtitles(subs);
-            TtsPlaybackService.setSharedOffset(offset);
-            TtsPlaybackService.setSharedRate(rate);
-        } else {
-            toast("Chua co Google TTS tieng Viet. Cai 'Speech Services by Google'.");
-        }
-    }
-
-    // ---------- che do thu cong ----------
+    // ---------- che do song song ----------
 
     private void pickSrt() {
         Intent i = new Intent(Intent.ACTION_OPEN_DOCUMENT);
@@ -295,6 +299,11 @@ public class MainActivity extends AppCompatActivity
         if (requestCode == REQ_SRT && resultCode == Activity.RESULT_OK
                 && data != null && data.getData() != null) {
             loadSrt(data.getData());
+        } else if (requestCode == REQ_OVERLAY) {
+            if (TtsPlaybackService.canDrawOverlay(this)) {
+                TtsPlaybackService.cmd(this, TtsPlaybackService.ACTION_SHOW_FLOAT);
+                toast("Da bat nut noi — sang Netflix van dieu khien duoc.");
+            }
         }
     }
 
@@ -308,7 +317,6 @@ public class MainActivity extends AppCompatActivity
                 sb.append(new String(buf, 0, n, "UTF-8"));
             }
             in.close();
-            // Bo BOM giong utf-8-sig Python.
             String content = sb.toString();
             if (!content.isEmpty() && content.charAt(0) == 0xFEFF) {
                 content = content.substring(1);
@@ -322,10 +330,9 @@ public class MainActivity extends AppCompatActivity
             duration = 0;
             for (SubtitleCue c : subs) duration = Math.max(duration, c.end);
             position = 0;
-            if (speaker != null) speaker.setSubtitles(subs);
             TtsPlaybackService.setSharedSubtitles(subs);
             tvStatus.setText("Da nap " + subs.size() + " cau phu de.");
-            toast("Da nap " + subs.size() + " cau.");
+            toast("Da nap " + subs.size() + " cau. Bam Play roi sang Netflix.");
             syncUi();
         } catch (Exception e) {
             toast("Khong doc duoc SRT: " + e.getMessage());
@@ -338,33 +345,44 @@ public class MainActivity extends AppCompatActivity
             return;
         }
         playing = p;
-        btnPlayPause.setText(p ? "Pause" : "Play");
-        if (speaker != null) speaker.setPlaying(p);
-        if (p) startService();
-        pushToSpeaker();
+        refreshPlayBtn();
+        ensureService();
+        if (p) TtsPlaybackService.cmd(this, TtsPlaybackService.ACTION_PLAY);
+        else TtsPlaybackService.cmd(this, TtsPlaybackService.ACTION_PAUSE);
     }
 
-    private void startService() {
+    private void refreshPlayBtn() {
+        btnPlayPause.setText(playing ? "Pause" : "Play");
+    }
+
+    private void ensureService() {
         Intent i = new Intent(this, TtsPlaybackService.class);
-        if (Build.VERSION.SDK_INT >= 26) {
-            startForegroundService(i);
-        } else {
-            startService(i);
-        }
+        try {
+            if (Build.VERSION.SDK_INT >= 26) startForegroundService(i);
+            else startService(i);
+        } catch (Exception ignored) {}
     }
 
-    private void pushToSpeaker() {
-        // V1: TTS duy nhat o Activity. Service chi giu process song.
-        if (speaker != null && ttsReady) {
-            speaker.setPlaying(playing);
-            speaker.onPosition(position);
+    /** Xin quyen overlay roi hien nut noi mo 50%. */
+    private void ensureFloat() {
+        ensureService();
+        if (!TtsPlaybackService.canDrawOverlay(this)) {
+            try {
+                Intent i = new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                        Uri.parse("package:" + getPackageName()));
+                startActivityForResult(i, REQ_OVERLAY);
+                toast("Cap quyen 'Hien thi tren ung dung khac' roi quay lai.");
+            } catch (Exception e) {
+                toast("Khong mo duoc xin quyen: " + e.getMessage());
+            }
+            return;
         }
+        TtsPlaybackService.cmd(this, TtsPlaybackService.ACTION_SHOW_FLOAT);
+        toast("Da bat nut noi — sang Netflix van dieu khien duoc.");
     }
 
-    private void highlight(int index) {
-        if (index >= 0 && index < subs.size()) {
-            tvCue.setText(subs.get(index).text);
-        }
+    private void highlight(String cue) {
+        tvCue.setText(cue);
     }
 
     private void syncUi() {
@@ -372,13 +390,10 @@ public class MainActivity extends AppCompatActivity
             seekPos.setProgress((int) (position / duration * 1000));
         }
         int idx = SubtitleParser.findIndex(subs, position + offset);
-        if (idx >= 0 && idx < subs.size() && idx != lastShown) {
-            lastShown = idx;
+        if (idx >= 0 && idx < subs.size()) {
             tvCue.setText(subs.get(idx).text);
         }
     }
-
-    private int lastShown = -2;
 
     // ---------- offset row (1 hang cuon ngang) ----------
 
@@ -397,8 +412,7 @@ public class MainActivity extends AppCompatActivity
             final float val = v;
             b.setOnClickListener(view -> {
                 offset = val;
-                if (speaker != null) speaker.setAudioOffset(val);
-                TtsPlaybackService.setSharedOffset(val);
+                TtsPlaybackService.setOffset(val);
                 getSharedPreferences("webtts", MODE_PRIVATE)
                         .edit().putFloat("offset", val).apply();
                 buildOffsetRow();
@@ -411,7 +425,7 @@ public class MainActivity extends AppCompatActivity
         }
     }
 
-    // ---------- WebView da trang ----------
+    // ---------- WebView YouTube (giu lai) ----------
 
     private void goUrl() {
         String raw = etUrl.getText().toString().trim();
@@ -436,8 +450,6 @@ public class MainActivity extends AppCompatActivity
         webView.loadUrl(url);
     }
 
-    // ---------- Gia desktop cho Netflix ----------
-
     private static final String DESKTOP_UA =
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
             + "AppleWebKit/537.36 (KHTML, like Gecko) "
@@ -448,7 +460,7 @@ public class MainActivity extends AppCompatActivity
             if (desktopMode) {
                 ws.setUserAgentString(DESKTOP_UA);
             } else {
-                ws.setUserAgentString(null); // ve UA mac dinh WebView
+                ws.setUserAgentString(null);
             }
         } catch (Exception ignored) {}
         refreshDesktopBtn();
@@ -468,22 +480,17 @@ public class MainActivity extends AppCompatActivity
             applyDesktopMode(webView.getSettings());
         } catch (Exception ignored) {}
         refreshDesktopBtn();
-        // Doi UA phai load lai trang moi co tac dung.
         try {
             webView.reload();
         } catch (Exception ignored) {}
         toast(desktopMode
-                ? "Gia desktop BAT — Netflix se cho xem web."
+                ? "Gia desktop BAT."
                 : "Gia desktop TAT — ve giao dien mobile.");
     }
 
     private void injectHook() {
-        // Hook moi <video> tren trang (khong chi video dau tien):
-        // poll 250ms + bat su kien play/pause/seeked de dong bo nhanh.
-        // Giu lastHooked de biet trang nao chua hook (SPA doi video khong load lai).
         String js = "(function(){"
                 + "if(window._webttsTimer)clearInterval(window._webttsTimer);"
-                + "window._webttsHook=false;"
                 + "function vids(){return document.querySelectorAll('video');}"
                 + "function best(){var vs=vids();if(!vs||!vs.length)return null;"
                 + "var b=vs[0];for(var i=0;i<vs.length;i++){"
@@ -504,7 +511,7 @@ public class MainActivity extends AppCompatActivity
         } catch (Exception ignored) {}
     }
 
-    /** Dat volume/mute cho moi <video> tren trang. */
+    /** Dat volume/mute cho moi <video> tren trang WebView. */
     private void applyVideoVolume() {
         String js = "(function(){"
                 + "if(window._webttsApplyVol){try{window._webttsApplyVol();}catch(e){}}"
@@ -539,14 +546,16 @@ public class MainActivity extends AppCompatActivity
         volBar.setVisibility(gone);
         btnFullscreen.setText(fullscreen ? "Thu nho" : "Phong to");
         if (fullscreen) {
-            getWindow().addFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN);
+            getWindow().addFlags(
+                    android.view.WindowManager.LayoutParams.FLAG_FULLSCREEN);
             try {
                 setRequestedOrientation(
                         android.content.pm.ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE);
             } catch (Exception ignored) {}
             toast("Che do phong to — bam Thu nho de ve.");
         } else {
-            getWindow().clearFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN);
+            getWindow().clearFlags(
+                    android.view.WindowManager.LayoutParams.FLAG_FULLSCREEN);
             try {
                 setRequestedOrientation(
                         android.content.pm.ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED);
@@ -557,7 +566,6 @@ public class MainActivity extends AppCompatActivity
     @Override
     public void onConfigurationChanged(Configuration newConfig) {
         super.onConfigurationChanged(newConfig);
-        // Khong lam gi dac biet: layout tu gian.
     }
 
     @Override
@@ -584,19 +592,25 @@ public class MainActivity extends AppCompatActivity
                                final double webDur) {
             runOnUiThread(() -> {
                 position = time;
+                TtsPlaybackService.setPosition(time);
                 if (webDur > 0 && (duration <= 0 || Math.abs(webDur - duration) > 5)) {
-                    // Neu chua co sub, lay duration tu video de SeekBar chay duoc.
                     if (subs.isEmpty()) duration = webDur;
                 }
                 if (playingNow != playing) {
-                    // Chi tu bat/tat khi da co sub; khong co sub thi giu nut tay.
-                    if (!subs.isEmpty()) setPlaying(playingNow);
-                    else {
+                    if (!subs.isEmpty()) {
                         playing = playingNow;
-                        btnPlayPause.setText(playing ? "Pause" : "Play");
+                        refreshPlayBtn();
+                        if (playingNow) {
+                            TtsPlaybackService.cmd(MainActivity.this,
+                                    TtsPlaybackService.ACTION_PLAY);
+                        } else {
+                            TtsPlaybackService.cmd(MainActivity.this,
+                                    TtsPlaybackService.ACTION_PAUSE);
+                        }
+                    } else {
+                        playing = playingNow;
+                        refreshPlayBtn();
                     }
-                } else {
-                    pushToSpeaker();
                 }
                 syncUi();
             });
@@ -620,17 +634,16 @@ public class MainActivity extends AppCompatActivity
     }
 
     @Override
+    protected void onResume() {
+        super.onResume();
+        playing = TtsPlaybackService.isPlayingNow();
+        refreshPlayBtn();
+    }
+
+    @Override
     protected void onDestroy() {
-        handler.removeCallbacks(ticker);
-        try {
-            stopService(new Intent(this, TtsPlaybackService.class));
-        } catch (Exception ignored) {}
-        try {
-            if (tts != null) {
-                tts.stop();
-                tts.shutdown();
-            }
-        } catch (Exception ignored) {}
+        if (uiTimer != null) uiTimer.cancel();
         super.onDestroy();
+        // Khong stop service: de doc nen khi sang Netflix.
     }
 }

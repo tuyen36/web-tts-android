@@ -52,6 +52,11 @@ public class SubtitleSpeaker {
      */
     private static final float CHARS_PER_SEC_AT_1X = 11.0f;
     private volatile float lastEffectiveRate = 1.0f;
+    /**
+     * Volume rieng cua giong doc sub (0.0 - 1.0). Doc lap voi volume media
+     * cua app Netflix/YouTube — dung de noi giong sub khi chay song song.
+     */
+    private volatile float ttsVolume = 1.0f;
 
     private volatile List<SubtitleCue> subtitles =
             java.util.Collections.emptyList();
@@ -122,6 +127,14 @@ public class SubtitleSpeaker {
     public float getLastEffectiveRate() { return lastEffectiveRate; }
 
     public void setRateDisplay(RateDisplay d) { rateDisplay = d; }
+
+    /** Volume giong doc 0..100% (rieng, khong anh huong app Netflix). */
+    public void setTtsVolume(int percent) {
+        if (percent < 0) percent = 0;
+        if (percent > 100) percent = 100;
+        ttsVolume = percent / 100.0f;
+    }
+    public int getTtsVolume() { return Math.round(ttsVolume * 100); }
 
     /**
      * Tinh rate can thiet de doc het text trong slot giay.
@@ -214,15 +227,11 @@ public class SubtitleSpeaker {
         try {
             tts.stop();
             String utterId = "webtts-" + idx + "-" + utterSeq.incrementAndGet();
-            if (Build.VERSION.SDK_INT >= 21) {
-                Bundle b = new Bundle();
-                b.putString(TextToSpeech.Engine.KEY_PARAM_UTTERANCE_ID, utterId);
-                tts.speak(text, TextToSpeech.QUEUE_FLUSH, b, utterId);
-            } else {
-                java.util.HashMap<String, String> params = new java.util.HashMap<>();
-                params.put(TextToSpeech.Engine.KEY_PARAM_UTTERANCE_ID, utterId);
-                tts.speak(text, TextToSpeech.QUEUE_FLUSH, params);
-            }
+            Bundle b = new Bundle();
+            b.putString(TextToSpeech.Engine.KEY_PARAM_UTTERANCE_ID, utterId);
+            // Volume rieng giong doc (minSdk 29 nen API 21+ luon dung).
+            b.putFloat(TextToSpeech.Engine.KEY_PARAM_VOLUME, ttsVolume);
+            tts.speak(text, TextToSpeech.QUEUE_FLUSH, b, utterId);
         } catch (Exception e) {
             if (listener != null) listener.onTtsError(idx);
         }
