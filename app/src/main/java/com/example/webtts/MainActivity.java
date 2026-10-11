@@ -1,27 +1,15 @@
 package com.example.webtts;
 
 import android.Manifest;
-import android.annotation.SuppressLint;
 import android.app.Activity;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
-import android.content.res.Configuration;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
-import android.os.Handler;
-import android.os.Looper;
 import android.provider.Settings;
-import android.view.View;
-import android.webkit.JavascriptInterface;
-import android.webkit.WebChromeClient;
-import android.webkit.WebSettings;
-import android.webkit.WebView;
-import android.webkit.WebViewClient;
 import android.widget.Button;
-import android.widget.EditText;
-import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 import android.widget.SeekBar;
 import android.widget.TextView;
@@ -39,14 +27,12 @@ import java.util.Timer;
 import java.util.TimerTask;
 
 /**
- * V1.4: che do chay SONG SONG app Netflix goc.
- *
- * - TTS + SubtitleSpeaker nam TRONG TtsPlaybackService (doc nen that).
- *   Activity KHONG tao TTS rieng -> khong trung giong.
- * - Activity: nap .srt -> bam Play -> service doc nen -> thoat sang
- *   Netflix xem binh thuong. Nut noi mo 50% dieu khien tu Netflix.
- * - Giu WebView de xem YouTube nhu cu (hook currentTime day ve service).
- * - Xin quyen overlay 1 lan de hien nut noi tren app khac.
+ * V1.9: Man CAI DAT rieng (TTS) — mo app len thay man nay.
+ * - Nap .srt, Play/Pause, offset, toc do, volume sub, chon giong,
+ *   nut noi, xoa cache.
+ * - Nut "Mo WebView" sang WebActivity xem YouTube full man hinh.
+ * - Xem Netflix app goc: bam Play o day roi thoat sang Netflix,
+ *   dieu khien bang nut noi mo 30%.
  */
 public class MainActivity extends AppCompatActivity {
 
@@ -58,53 +44,31 @@ public class MainActivity extends AppCompatActivity {
     private static final float[] OFFSETS =
             {2.0f, 1.5f, 1.0f, 0.5f, 0.0f, -0.5f, -1.0f};
 
-    private static final String PRESET_YT = "https://www.youtube.com/";
-    private static final String PRESET_NF = "https://www.netflix.com/browse";
-    private static final String PRESET_FPT = "https://fptplay.vn/";
-    private static final String PRESET_TV360 = "https://tv360.vn/";
-
     private List<SubtitleCue> subs = new ArrayList<>();
 
     private TextView tvStatus;
     private TextView tvCue;
     private TextView tvRate;
-    private TextView tvVideoVol;
     private TextView tvTtsVol;
     private Button btnPlayPause;
     private Button btnFloat;
     private Button btnVoice;
+    private Button btnClearCache;
     private int voice = TtsPlaybackService.VOICE_GOOGLE;
-    private Button btnMute;
-    private Button btnFullscreen;
     private SeekBar seekPos;
     private SeekBar seekRate;
-    private SeekBar seekVideoVol;
     private SeekBar seekTtsVol;
     private LinearLayout rowOffset;
-    private LinearLayout ttsPanel;
-    private LinearLayout webBar;
-    private LinearLayout rowPreset;
-    private LinearLayout volBar;
-    private EditText etUrl;
-    private FrameLayout webContainer;
-    private WebView webView;
 
     private boolean playing = false;
-    private double position = 0;   // giay (che do thu cong / webview)
-    private double duration = 0;   // giay (max end cue)
+    private double position = 0;
+    private double duration = 0;
     private float offset = 0f;
     private float rate = 1.0f;
-    private int videoVol = 30;     // % am luong video WebView
-    private int ttsVol = 100;      // % volume giong doc sub
-    private boolean videoMuted = false;
-    private boolean fullscreen = false;
-    /** Gia desktop de Netflix web khong ep mo app goc. Mac dinh BAT. */
-    private boolean desktopMode = true;
-    private Button btnDesktop;
+    private int ttsVol = 100;
 
     private Timer uiTimer;
 
-    @SuppressLint({"SetJavaScriptEnabled", "AddJavascriptInterface"})
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -113,23 +77,12 @@ public class MainActivity extends AppCompatActivity {
         tvStatus = findViewById(R.id.tvStatus);
         tvCue = findViewById(R.id.tvCue);
         tvRate = findViewById(R.id.tvRate);
-        tvVideoVol = findViewById(R.id.tvVideoVol);
         btnPlayPause = findViewById(R.id.btnPlayPause);
-        btnMute = findViewById(R.id.btnMute);
-        btnFullscreen = findViewById(R.id.btnFullscreen);
         seekPos = findViewById(R.id.seekPos);
         seekRate = findViewById(R.id.seekRate);
-        seekVideoVol = findViewById(R.id.seekVideoVol);
         rowOffset = findViewById(R.id.rowOffset);
-        ttsPanel = findViewById(R.id.ttsPanel);
-        webBar = findViewById(R.id.webBar);
-        rowPreset = findViewById(R.id.rowPreset);
-        volBar = findViewById(R.id.volBar);
-        etUrl = findViewById(R.id.etUrl);
-        webContainer = findViewById(R.id.webContainer);
-        webView = findViewById(R.id.webView);
 
-        // Hang volume giong doc (them bang code de khoi sua layout lon).
+        // Hang volume giong doc (them bang code).
         tvTtsVol = new TextView(this);
         tvTtsVol.setText("Sub 100%");
         tvTtsVol.setTextColor(0xFFFFFFFF);
@@ -143,58 +96,45 @@ public class MainActivity extends AppCompatActivity {
                 0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
         seekTtsVol.setLayoutParams(ttsLp);
 
-        // Nut mo nut noi (them canh nut Play).
+        // Hang nut: nut noi + giong + xoa cache (them bang code).
+        LinearLayout playRow = (LinearLayout) btnPlayPause.getParent();
         btnFloat = new Button(this);
         btnFloat.setText("Nut noi");
         btnFloat.setTextSize(12);
-        LinearLayout playRow = (LinearLayout) btnPlayPause.getParent();
         playRow.addView(btnFloat);
 
-        // Nut chon giong doc: Google offline / HoaiMy online.
         btnVoice = new Button(this);
         btnVoice.setTextSize(12);
         playRow.addView(btnVoice);
         btnVoice.setOnClickListener(v -> toggleVoice());
 
+        btnClearCache = new Button(this);
+        btnClearCache.setTextSize(12);
+        playRow.addView(btnClearCache);
+        btnClearCache.setOnClickListener(v -> clearCacheUi());
+
         SharedPreferences sp =
                 getSharedPreferences("webtts", MODE_PRIVATE);
         offset = sp.getFloat("offset", 0f);
         rate = sp.getFloat("rate", 1.0f);
-        videoVol = sp.getInt("videoVol", 30);
         ttsVol = sp.getInt("ttsVol", 100);
         voice = sp.getInt("voice", TtsPlaybackService.VOICE_GOOGLE);
-        desktopMode = sp.getBoolean("desktopMode", true);
-        String lastUrl = sp.getString("lastUrl", PRESET_YT);
-        etUrl.setText(lastUrl);
 
         buildOffsetRow();
         refreshVoiceBtn();
+        refreshCacheBtn();
         seekRate.setProgress(Math.round((rate - 0.5f) / 2.0f * 200));
         tvRate.setText(String.format(Locale.US, "%.1fx", rate));
-        seekVideoVol.setProgress(videoVol);
-        tvVideoVol.setText(videoVol + "%");
         seekTtsVol.setProgress(ttsVol);
         tvTtsVol.setText("Sub " + ttsVol + "%");
-        refreshMuteBtn();
         refreshPlayBtn();
 
         findViewById(R.id.btnPickSrt).setOnClickListener(v -> pickSrt());
         btnPlayPause.setOnClickListener(v -> setPlaying(!playing));
         btnFloat.setOnClickListener(v -> ensureFloat());
-        findViewById(R.id.btnGo).setOnClickListener(v -> goUrl());
-        findViewById(R.id.btnPresetYt).setOnClickListener(
-                v -> openPreset(PRESET_YT));
-        findViewById(R.id.btnPresetNf).setOnClickListener(
-                v -> openPreset(PRESET_NF));
-        findViewById(R.id.btnPresetFpt).setOnClickListener(
-                v -> openPreset(PRESET_FPT));
-        findViewById(R.id.btnPresetTv).setOnClickListener(
-                v -> openPreset(PRESET_TV360));
-        btnDesktop = findViewById(R.id.btnDesktop);
-        btnDesktop.setOnClickListener(v -> toggleDesktopMode());
-        refreshDesktopBtn();
-        btnMute.setOnClickListener(v -> toggleMute());
-        btnFullscreen.setOnClickListener(v -> toggleFullscreen());
+        findViewById(R.id.btnOpenWeb).setOnClickListener(v -> {
+            startActivity(new Intent(this, WebActivity.class));
+        });
 
         seekPos.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
             @Override public void onProgressChanged(SeekBar s, int p, boolean fromUser) {
@@ -227,40 +167,6 @@ public class MainActivity extends AppCompatActivity {
             @Override public void onStartTrackingTouch(SeekBar s) {}
             @Override public void onStopTrackingTouch(SeekBar s) {}
         });
-        seekVideoVol.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
-            @Override public void onProgressChanged(SeekBar s, int p, boolean fromUser) {
-                videoVol = p;
-                tvVideoVol.setText(p + "%");
-                sp.edit().putInt("videoVol", p).apply();
-                if (fromUser) {
-                    if (p > 0 && videoMuted) {
-                        videoMuted = false;
-                        refreshMuteBtn();
-                    }
-                    applyVideoVolume();
-                }
-            }
-            @Override public void onStartTrackingTouch(SeekBar s) {}
-            @Override public void onStopTrackingTouch(SeekBar s) {}
-        });
-
-        // WebView YouTube: gia desktop + hook currentTime day ve service.
-        WebSettings ws = webView.getSettings();
-        ws.setJavaScriptEnabled(true);
-        ws.setDomStorageEnabled(true);
-        ws.setMediaPlaybackRequiresUserGesture(false);
-        ws.setLoadWithOverviewMode(true);
-        ws.setUseWideViewPort(true);
-        ws.setSupportMultipleWindows(false);
-        applyDesktopMode(ws);
-        webView.setWebChromeClient(new WebChromeClient());
-        webView.setWebViewClient(new WebViewClient() {
-            @Override public void onPageFinished(WebView view, String url) {
-                injectHook();
-                applyVideoVolume();
-            }
-        });
-        webView.addJavascriptInterface(new VideoBridge(), "WebTTS");
 
         // Poll trang thai service de refresh nut Play + cau hien tai.
         uiTimer = new Timer();
@@ -341,9 +247,11 @@ public class MainActivity extends AppCompatActivity {
             duration = 0;
             for (SubtitleCue c : subs) duration = Math.max(duration, c.end);
             position = 0;
+            ensureService();
             TtsPlaybackService.setSharedSubtitles(subs);
             tvStatus.setText("Da nap " + subs.size() + " cau phu de.");
             toast("Da nap " + subs.size() + " cau. Bam Play roi sang Netflix.");
+            refreshCacheBtn();
             syncUi();
         } catch (Exception e) {
             toast("Khong doc duoc SRT: " + e.getMessage());
@@ -392,6 +300,24 @@ public class MainActivity extends AppCompatActivity {
                 ? "HoaiMy" : "Google");
     }
 
+    /** Xoa cache HoaiMy + cap nhat chu tren nut (VD "Xoa cache (35MB)"). */
+    private void clearCacheUi() {
+        ensureService();
+        int removed = TtsPlaybackService.clearCache();
+        refreshCacheBtn();
+        toast(removed > 0 ? "Da xoa " + removed + " file cache."
+                : "Cache dang trong.");
+    }
+
+    private void refreshCacheBtn() {
+        if (btnClearCache == null) return;
+        try {
+            btnClearCache.setText(TtsPlaybackService.cacheText());
+        } catch (Exception e) {
+            btnClearCache.setText("Xoa cache");
+        }
+    }
+
     private void ensureService() {
         Intent i = new Intent(this, TtsPlaybackService.class);
         try {
@@ -400,7 +326,7 @@ public class MainActivity extends AppCompatActivity {
         } catch (Exception ignored) {}
     }
 
-    /** Xin quyen overlay roi hien nut noi mo 50%. */
+    /** Xin quyen overlay roi hien nut noi mo 30%. */
     private void ensureFloat() {
         ensureService();
         if (!TtsPlaybackService.canDrawOverlay(this)) {
@@ -416,10 +342,6 @@ public class MainActivity extends AppCompatActivity {
         }
         TtsPlaybackService.cmd(this, TtsPlaybackService.ACTION_SHOW_FLOAT);
         toast("Da bat nut noi — sang Netflix van dieu khien duoc.");
-    }
-
-    private void highlight(String cue) {
-        tvCue.setText(cue);
     }
 
     private void syncUi() {
@@ -462,198 +384,6 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    // ---------- WebView YouTube (giu lai) ----------
-
-    private void goUrl() {
-        String raw = etUrl.getText().toString().trim();
-        if (raw.isEmpty()) {
-            toast("Nhap link trang web truoc.");
-            return;
-        }
-        String url = raw;
-        if (!url.startsWith("http://") && !url.startsWith("https://")) {
-            url = "https://" + url;
-        }
-        etUrl.setText(url);
-        getSharedPreferences("webtts", MODE_PRIVATE)
-                .edit().putString("lastUrl", url).apply();
-        webView.loadUrl(url);
-    }
-
-    private void openPreset(String url) {
-        etUrl.setText(url);
-        getSharedPreferences("webtts", MODE_PRIVATE)
-                .edit().putString("lastUrl", url).apply();
-        webView.loadUrl(url);
-    }
-
-    private static final String DESKTOP_UA =
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-            + "AppleWebKit/537.36 (KHTML, like Gecko) "
-            + "Chrome/122.0.0.0 Safari/537.36";
-
-    private void applyDesktopMode(WebSettings ws) {
-        try {
-            if (desktopMode) {
-                ws.setUserAgentString(DESKTOP_UA);
-            } else {
-                ws.setUserAgentString(null);
-            }
-        } catch (Exception ignored) {}
-        refreshDesktopBtn();
-    }
-
-    private void refreshDesktopBtn() {
-        if (btnDesktop != null) {
-            btnDesktop.setText(desktopMode ? "Desktop: Bat" : "Desktop: Tat");
-        }
-    }
-
-    private void toggleDesktopMode() {
-        desktopMode = !desktopMode;
-        getSharedPreferences("webtts", MODE_PRIVATE)
-                .edit().putBoolean("desktopMode", desktopMode).apply();
-        try {
-            applyDesktopMode(webView.getSettings());
-        } catch (Exception ignored) {}
-        refreshDesktopBtn();
-        try {
-            webView.reload();
-        } catch (Exception ignored) {}
-        toast(desktopMode
-                ? "Gia desktop BAT."
-                : "Gia desktop TAT — ve giao dien mobile.");
-    }
-
-    private void injectHook() {
-        String js = "(function(){"
-                + "if(window._webttsTimer)clearInterval(window._webttsTimer);"
-                + "function vids(){return document.querySelectorAll('video');}"
-                + "function best(){var vs=vids();if(!vs||!vs.length)return null;"
-                + "var b=vs[0];for(var i=0;i<vs.length;i++){"
-                + "if(!vs[i].paused){b=vs[i];break;}"
-                + "if((vs[i].clientWidth||0)>(b.clientWidth||0))b=vs[i];}return b;}"
-                + "function applyVol(){"
-                + "try{var vs=vids();for(var i=0;i<vs.length;i++){"
-                + "vs[i].volume=" + (videoVol / 100.0) + ";"
-                + "vs[i].muted=" + (videoMuted ? "true" : "false") + ";"
-                + "}}catch(e){}}"
-                + "window._webttsApplyVol=applyVol;applyVol();"
-                + "window._webttsTimer=setInterval(function(){"
-                + "var v=best();if(!v)return;"
-                + "try{WebTTS.onProgress(v.currentTime||0,!v.paused,v.duration||0);}catch(e){}"
-                + "},250);})();";
-        try {
-            webView.evaluateJavascript(js, null);
-        } catch (Exception ignored) {}
-    }
-
-    /** Dat volume/mute cho moi <video> tren trang WebView. */
-    private void applyVideoVolume() {
-        String js = "(function(){"
-                + "if(window._webttsApplyVol){try{window._webttsApplyVol();}catch(e){}}"
-                + "try{var vs=document.querySelectorAll('video');"
-                + "for(var i=0;i<vs.length;i++){"
-                + "vs[i].volume=" + (videoVol / 100.0) + ";"
-                + "vs[i].muted=" + (videoMuted ? "true" : "false") + ";"
-                + "}}catch(e){}})();";
-        try {
-            webView.evaluateJavascript(js, null);
-        } catch (Exception ignored) {}
-    }
-
-    private void toggleMute() {
-        videoMuted = !videoMuted;
-        refreshMuteBtn();
-        applyVideoVolume();
-        toast(videoMuted ? "Da tat tieng video goc." : "Da mo tieng video goc.");
-    }
-
-    private void refreshMuteBtn() {
-        btnMute.setText(videoMuted ? "Mo tieng" : "Tat tieng");
-    }
-
-    /** Fullscreen: an cum TTS + thanh trang de video chiem het man hinh. */
-    private void toggleFullscreen() {
-        fullscreen = !fullscreen;
-        int gone = fullscreen ? View.GONE : View.VISIBLE;
-        ttsPanel.setVisibility(gone);
-        webBar.setVisibility(gone);
-        rowPreset.setVisibility(gone);
-        volBar.setVisibility(gone);
-        btnFullscreen.setText(fullscreen ? "Thu nho" : "Phong to");
-        if (fullscreen) {
-            getWindow().addFlags(
-                    android.view.WindowManager.LayoutParams.FLAG_FULLSCREEN);
-            try {
-                setRequestedOrientation(
-                        android.content.pm.ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE);
-            } catch (Exception ignored) {}
-            toast("Che do phong to — bam Thu nho de ve.");
-        } else {
-            getWindow().clearFlags(
-                    android.view.WindowManager.LayoutParams.FLAG_FULLSCREEN);
-            try {
-                setRequestedOrientation(
-                        android.content.pm.ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED);
-            } catch (Exception ignored) {}
-        }
-    }
-
-    @Override
-    public void onConfigurationChanged(Configuration newConfig) {
-        super.onConfigurationChanged(newConfig);
-    }
-
-    @Override
-    public void onBackPressed() {
-        if (fullscreen) {
-            toggleFullscreen();
-            return;
-        }
-        if (webView.canGoBack()) {
-            webView.goBack();
-            return;
-        }
-        super.onBackPressed();
-    }
-
-    private class VideoBridge {
-        @JavascriptInterface
-        public void onProgress(final double time, final boolean playingNow) {
-            onProgress(time, playingNow, 0);
-        }
-
-        @JavascriptInterface
-        public void onProgress(final double time, final boolean playingNow,
-                               final double webDur) {
-            runOnUiThread(() -> {
-                position = time;
-                TtsPlaybackService.setPosition(time);
-                if (webDur > 0 && (duration <= 0 || Math.abs(webDur - duration) > 5)) {
-                    if (subs.isEmpty()) duration = webDur;
-                }
-                if (playingNow != playing) {
-                    if (!subs.isEmpty()) {
-                        playing = playingNow;
-                        refreshPlayBtn();
-                        if (playingNow) {
-                            TtsPlaybackService.cmd(MainActivity.this,
-                                    TtsPlaybackService.ACTION_PLAY);
-                        } else {
-                            TtsPlaybackService.cmd(MainActivity.this,
-                                    TtsPlaybackService.ACTION_PAUSE);
-                        }
-                    } else {
-                        playing = playingNow;
-                        refreshPlayBtn();
-                    }
-                }
-                syncUi();
-            });
-        }
-    }
-
     // ---------- misc ----------
 
     private void askNotif() {
@@ -675,8 +405,11 @@ public class MainActivity extends AppCompatActivity {
         super.onResume();
         playing = TtsPlaybackService.isPlayingNow();
         voice = TtsPlaybackService.getVoice();
+        position = TtsPlaybackService.getPosition();
         refreshPlayBtn();
         refreshVoiceBtn();
+        refreshCacheBtn();
+        syncUi();
     }
 
     @Override

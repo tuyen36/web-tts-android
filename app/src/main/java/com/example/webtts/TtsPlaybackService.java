@@ -58,8 +58,8 @@ public class TtsPlaybackService extends Service
     private static final String CH_ID = "webtts_playback";
     private static final int NOTIF_ID = 1001;
 
-    // Do mo nut noi theo yeu cau user: 50%.
-    private static final float FLOAT_ALPHA = 0.5f;
+    // Do mo nut noi theo yeu cau user: 30%.
+    private static final float FLOAT_ALPHA = 0.3f;
 
     // ----- state dung chung (static de Activity doc nhanh) -----
     private static List<SubtitleCue> sharedSubs =
@@ -71,6 +71,21 @@ public class TtsPlaybackService extends Service
                 ? java.util.Collections.emptyList() : subs;
         sharedCount = sharedSubs.size();
         if (running != null) running.applyShared();
+        // Nap sub moi: moc gio ve 00:00 + dung doc + chot moc moi.
+        if (running != null) running.resetToStart();
+    }
+
+    /** Nap sub moi -> ve 00:00, dung doc, san sang Play tu dau. */
+    private void resetToStart() {
+        setPlaying(false);
+        position = 0;
+        playBase = 0;
+        playStartElapsed = android.os.SystemClock.elapsedRealtime();
+        lastCueText = "...";
+        if (speaker != null) speaker.resetIndex();
+        if (edge != null) edge.stopPlayer();
+        refreshFloatTime();
+        updateNotif();
     }
 
     private static TtsPlaybackService running;
@@ -541,6 +556,20 @@ public class TtsPlaybackService extends Service
         return running.edge.readyCount() + " cau";
     }
 
+    /** Tong MB cache HoaiMy de hien tren nut Xoa cache. */
+    public static String cacheText() {
+        if (running == null || running.edge == null) return "Xoa cache (0MB)";
+        long b = running.edge.cacheBytes();
+        long mb = b / (1024 * 1024);
+        return "Xoa cache (" + mb + "MB)";
+    }
+
+    /** Xoa sach mp3 HoaiMy da tai. Tra ve so file da xoa. */
+    public static int clearCache() {
+        if (running == null || running.edge == null) return 0;
+        return running.edge.clearCache();
+    }
+
     public static void setPosition(double pos) {
         if (running != null) {
             running.position = pos;
@@ -751,9 +780,17 @@ public class TtsPlaybackService extends Service
             hideFloat();
         });
         Button bOpen = new Button(ctx);
-        bOpen.setText("Mo app");
+        bOpen.setText("Mo web");
         bOpen.setTextSize(12);
         bOpen.setOnClickListener(v -> {
+            Intent i = new Intent(ctx, WebActivity.class);
+            i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            startActivity(i);
+        });
+        Button bSetup = new Button(ctx);
+        bSetup.setText("Cai dat");
+        bSetup.setTextSize(12);
+        bSetup.setOnClickListener(v -> {
             Intent i = new Intent(ctx, MainActivity.class);
             i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
             startActivity(i);
@@ -761,8 +798,12 @@ public class TtsPlaybackService extends Service
         row3.addView(bHide);
         row3.addView(bSplit);
         row3.addView(bStop);
-        row3.addView(bOpen);
+        LinearLayout row4 = new LinearLayout(ctx);
+        row4.setOrientation(LinearLayout.HORIZONTAL);
+        row4.addView(bOpen);
+        row4.addView(bSetup);
         floatPanel.addView(row3);
+        floatPanel.addView(row4);
 
         root.addView(floatDot);
         root.addView(floatPanel);

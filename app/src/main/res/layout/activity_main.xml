@@ -1,29 +1,23 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- V1.2: UI gon lai theo phan hoi user.
-  - Phan TTS len tren (chon sub / cau hien tai / offset / toc do).
-  - Phan web xuong duoi: o nhap link + nut Di + preset + volume video + fullscreen.
-  - WebView chiem phan con lai, co the phong to bang nut fullscreen. -->
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    android:id="@+id/rootLayout"
+<!-- V1.9: Man Cai dat rieng (TTS) — WebView tach sang WebActivity. -->
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:orientation="vertical"
     android:background="#111111"
-    android:padding="10dp">
+    android:fillViewport="true">
 
-    <!-- ===== Cum TTS (gon) ===== -->
     <LinearLayout
-        android:id="@+id/ttsPanel"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="vertical">
+        android:orientation="vertical"
+        android:padding="12dp">
 
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Web TTS — Doc phu de tieng Viet"
+            android:text="Web TTS — Cai dat"
             android:textColor="#FFFFFF"
-            android:textSize="17sp"
+            android:textSize="18sp"
             android:textStyle="bold" />
 
         <TextView
@@ -31,14 +25,14 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginTop="2dp"
-            android:text="Chua co phu de — chon .srt ben duoi"
+            android:text="Chua co phu de — chon .srt"
             android:textColor="#888888"
             android:textSize="12sp" />
 
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="6dp"
+            android:layout_marginTop="8dp"
             android:orientation="horizontal">
 
             <Button
@@ -62,9 +56,9 @@
             android:id="@+id/tvCue"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="6dp"
+            android:layout_marginTop="8dp"
             android:minHeight="48dp"
-            android:maxLines="3"
+            android:maxLines="4"
             android:ellipsize="end"
             android:text="..."
             android:textColor="#FFFFFF"
@@ -75,10 +69,10 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content" />
 
-        <!-- Offset gon: 1 hang ngang cuon duoc thay cho grid 3 cot -->
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
             android:text="Offset dong bo:"
             android:textColor="#CCCCCC"
             android:textSize="12sp" />
@@ -95,19 +89,19 @@
                 android:orientation="horizontal" />
         </HorizontalScrollView>
 
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="Toc do doc:"
+            android:textColor="#CCCCCC"
+            android:textSize="12sp" />
+
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="4dp"
             android:gravity="center_vertical"
             android:orientation="horizontal">
-
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="Toc do:"
-                android:textColor="#CCCCCC"
-                android:textSize="12sp" />
 
             <SeekBar
                 android:id="@+id/seekRate"
@@ -125,154 +119,22 @@
                 android:textColor="#FFFFFF"
                 android:textSize="12sp" />
         </LinearLayout>
-    </LinearLayout>
-
-    <!-- ===== Cum WEB ===== -->
-    <View
-        android:layout_width="match_parent"
-        android:layout_height="1dp"
-        android:layout_marginTop="6dp"
-        android:background="#333333" />
-
-    <LinearLayout
-        android:id="@+id/webBar"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="6dp"
-        android:gravity="center_vertical"
-        android:orientation="horizontal">
-
-        <EditText
-            android:id="@+id/etUrl"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:hint="Nhap link web (youtube, netflix, ...)"
-            android:textColor="#FFFFFF"
-            android:textColorHint="#777777"
-            android:textSize="13sp"
-            android:singleLine="true"
-            android:inputType="textUri"
-            android:background="#222222"
-            android:padding="8dp" />
 
         <Button
-            android:id="@+id/btnGo"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginStart="6dp"
-            android:text="Di"
-            android:textSize="13sp" />
-    </LinearLayout>
-
-    <!-- Hang preset trang nhanh -->
-    <LinearLayout
-        android:id="@+id/rowPreset"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="4dp"
-        android:orientation="horizontal">
-
-        <Button
-            android:id="@+id/btnPresetYt"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:text="YouTube"
-            android:textSize="12sp" />
-
-        <Button
-            android:id="@+id/btnPresetNf"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:text="Netflix"
-            android:textSize="12sp" />
-
-        <Button
-            android:id="@+id/btnPresetFpt"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:text="FPT Play"
-            android:textSize="12sp" />
-
-        <Button
-            android:id="@+id/btnPresetTv"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:text="TV360"
-            android:textSize="12sp" />
-
-        <Button
-            android:id="@+id/btnDesktop"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:text="Desktop: Bat"
-            android:textSize="12sp" />
-    </LinearLayout>
-
-    <!-- Am luong video goc + fullscreen -->
-    <LinearLayout
-        android:id="@+id/volBar"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="4dp"
-        android:gravity="center_vertical"
-        android:orientation="horizontal">
-
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="Video goc:"
-            android:textColor="#CCCCCC"
-            android:textSize="12sp" />
-
-        <SeekBar
-            android:id="@+id/seekVideoVol"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:max="100"
-            android:progress="30" />
-
-        <TextView
-            android:id="@+id/tvVideoVol"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="30%"
-            android:textColor="#FFFFFF"
-            android:textSize="12sp" />
-
-        <Button
-            android:id="@+id/btnMute"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="Tat tieng"
-            android:textSize="12sp" />
-
-        <Button
-            android:id="@+id/btnFullscreen"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="Phong to"
-            android:textSize="12sp" />
-    </LinearLayout>
-
-    <!-- Khung video: co the an cum TTS de phong to khi fullscreen -->
-    <FrameLayout
-        android:id="@+id/webContainer"
-        android:layout_width="match_parent"
-        android:layout_height="0dp"
-        android:layout_weight="1"
-        android:layout_marginTop="6dp">
-
-        <WebView
-            android:id="@+id/webView"
+            android:id="@+id/btnOpenWeb"
             android:layout_width="match_parent"
-            android:layout_height="match_parent" />
-    </FrameLayout>
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:text="Mo WebView xem YouTube"
+            android:textSize="14sp" />
 
-</LinearLayout>
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="Xem Netflix app goc thi bam Play o tren roi thoat sang Netflix, dieu khien bang nut noi."
+            android:textColor="#888888"
+            android:textSize="12sp" />
+
+    </LinearLayout>
+</ScrollView>

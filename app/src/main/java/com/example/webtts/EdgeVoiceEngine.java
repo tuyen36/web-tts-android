@@ -102,6 +102,41 @@ public class EdgeVoiceEngine {
 
     public int getCurrentIndex() { return currentIndex; }
 
+    /** Tong dung luong mp3 HoaiMy dang chiem (byte). */
+    public long cacheBytes() {
+        long total = 0;
+        try {
+            File[] fs = cacheDir.listFiles();
+            if (fs != null) {
+                for (File f : fs) {
+                    if (f.isFile()) total += f.length();
+                }
+            }
+        } catch (Exception ignored) {}
+        return total;
+    }
+
+    /** Xoa sach mp3 HoaiMy da tai (nut Xoa cache trong app). */
+    public int clearCache() {
+        generation.incrementAndGet();
+        stopPlayer();
+        readyPath.clear();
+        rawDur.clear();
+        queued.clear();
+        int removed = 0;
+        try {
+            File[] fs = cacheDir.listFiles();
+            if (fs != null) {
+                for (File f : fs) {
+                    try {
+                        if (f.isFile() && f.delete()) removed++;
+                    } catch (Exception ignored) {}
+                }
+            }
+        } catch (Exception ignored) {}
+        return removed;
+    }
+
     private static String key(int index, String text) {
         try {
             String raw = VOICE + "|" + index + "|" + text;
