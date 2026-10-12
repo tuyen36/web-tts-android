@@ -12,8 +12,8 @@ android {
         // API hien dai (TTS gb, SAF, WebView nhe), APK gon hon ban K016.
         minSdk 29
         targetSdk 34
-        versionCode 10
-        versionName "2.3"
+        versionCode 12
+        versionName "2.5"
     }
 
     buildTypes {

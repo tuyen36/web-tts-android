@@ -1,66 +1,41 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- V2.0: 1 Activity 2 tab — tab Cai dat + tab Web chung WebView, khong tai lai trang. -->
+<!-- V2.4 -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
     android:background="#0D1117">
-
-    <!-- Thanh tab tren -->
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:padding="8dp">
-
-        <Button
-            android:id="@+id/tabSetup"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:text="⚙  Cai dat"
-            android:textSize="14sp"
-            android:textStyle="bold" />
-
-        <Button
-            android:id="@+id/tabWeb"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_marginStart="8dp"
-            android:layout_weight="1"
-            android:text="🌐  Web"
-            android:textSize="14sp" />
-    </LinearLayout>
-
-    <!-- ===== TAB CAI DAT ===== -->
     <ScrollView
         android:id="@+id/paneSetup"
         android:layout_width="match_parent"
         android:layout_height="0dp"
         android:layout_weight="1"
         android:fillViewport="true">
-
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="vertical"
             android:padding="16dp">
-
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:gravity="center_vertical"
                 android:orientation="horizontal">
-
+                <Button
+                    android:id="@+id/btnMenuWeb"
+                    android:layout_width="48dp"
+                    android:layout_height="48dp"
+                    android:text="☰"
+                    android:textSize="20sp" />
                 <TextView
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
+                    android:layout_marginStart="8dp"
                     android:text="Web TTS"
                     android:textColor="#FFFFFF"
                     android:textSize="22sp"
                     android:textStyle="bold" />
-
                 <TextView
                     android:id="@+id/tvVoiceBadge"
                     android:layout_width="wrap_content"
@@ -74,17 +49,51 @@
                     android:textColor="#58A6FF"
                     android:textSize="12sp" />
             </LinearLayout>
-
             <TextView
                 android:id="@+id/tvStatus"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="4dp"
-                android:text="Chua co phu de — chon file .srt"
+                android:text="Chua co phu de"
                 android:textColor="#8B949E"
                 android:textSize="13sp" />
-
-            <!-- The cau dang doc -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
+                android:orientation="horizontal">
+                <Button
+                    android:id="@+id/btnPresetYt2"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="YouTube"
+                    android:textSize="12sp" />
+                <Button
+                    android:id="@+id/btnPresetFpt2"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="6dp"
+                    android:layout_weight="1"
+                    android:text="FPT Play"
+                    android:textSize="12sp" />
+                <Button
+                    android:id="@+id/btnPresetTv2"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="6dp"
+                    android:layout_weight="1"
+                    android:text="TV360"
+                    android:textSize="12sp" />
+                <Button
+                    android:id="@+id/btnDesktop2"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="6dp"
+                    android:layout_weight="1"
+                    android:text="Desktop: Tat"
+                    android:textSize="12sp" />
+            </LinearLayout>
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
@@ -92,7 +101,6 @@
                 android:background="#161B22"
                 android:orientation="vertical"
                 android:padding="14dp">
-
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
@@ -100,7 +108,6 @@
                     android:textColor="#58A6FF"
                     android:textSize="11sp"
                     android:textStyle="bold" />
-
                 <TextView
                     android:id="@+id/tvCue"
                     android:layout_width="match_parent"
@@ -112,7 +119,6 @@
                     android:text="..."
                     android:textColor="#FFFFFF"
                     android:textSize="17sp" />
-
                 <TextView
                     android:id="@+id/tvTime"
                     android:layout_width="wrap_content"
@@ -122,39 +128,34 @@
                     android:textColor="#58A6FF"
                     android:textSize="13sp" />
             </LinearLayout>
-
             <SeekBar
                 android:id="@+id/seekPos"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="4dp" />
-
             <Button
                 android:id="@+id/btnPlayPause"
                 android:layout_width="match_parent"
                 android:layout_height="56dp"
                 android:layout_marginTop="8dp"
                 android:backgroundTint="#1F6FEB"
-                android:text="▶  Play"
+                android:text="Play"
                 android:textSize="17sp"
                 android:textStyle="bold" />
-
             <Button
                 android:id="@+id/btnPickSrt"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="8dp"
-                android:text="📁  Chon file phu de (.srt)"
+                android:text="Chon file phu de (.srt)"
                 android:textSize="14sp" />
-
             <Button
                 android:id="@+id/btnAutoSub"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="8dp"
-                android:text="✨  Tu lay sub YouTube"
+                android:text="Tu lay sub YouTube"
                 android:textSize="14sp" />
-
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
@@ -162,13 +163,11 @@
                 android:text="Giong doc"
                 android:textColor="#8B949E"
                 android:textSize="12sp" />
-
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="4dp"
                 android:orientation="horizontal">
-
                 <Button
                     android:id="@+id/btnVoiceGoogle"
                     android:layout_width="0dp"
@@ -176,7 +175,6 @@
                     android:layout_weight="1"
                     android:text="Google (offline)"
                     android:textSize="13sp" />
-
                 <Button
                     android:id="@+id/btnVoiceHoaiMy"
                     android:layout_width="0dp"
@@ -186,7 +184,6 @@
                     android:text="HoaiMy (online)"
                     android:textSize="13sp" />
             </LinearLayout>
-
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
@@ -194,13 +191,11 @@
                 android:text="Toc do doc"
                 android:textColor="#8B949E"
                 android:textSize="12sp" />
-
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:gravity="center_vertical"
                 android:orientation="horizontal">
-
                 <SeekBar
                     android:id="@+id/seekRate"
                     android:layout_width="0dp"
@@ -208,7 +203,6 @@
                     android:layout_weight="1"
                     android:max="200"
                     android:progress="50" />
-
                 <TextView
                     android:id="@+id/tvRate"
                     android:layout_width="wrap_content"
@@ -219,7 +213,6 @@
                     android:textSize="14sp"
                     android:textStyle="bold" />
             </LinearLayout>
-
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
@@ -227,13 +220,11 @@
                 android:text="Am luong giong doc"
                 android:textColor="#8B949E"
                 android:textSize="12sp" />
-
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:gravity="center_vertical"
                 android:orientation="horizontal">
-
                 <SeekBar
                     android:id="@+id/seekTtsVol"
                     android:layout_width="0dp"
@@ -241,7 +232,6 @@
                     android:layout_weight="1"
                     android:max="100"
                     android:progress="100" />
-
                 <TextView
                     android:id="@+id/tvTtsVol"
                     android:layout_width="wrap_content"
@@ -252,21 +242,18 @@
                     android:textSize="14sp"
                     android:textStyle="bold" />
             </LinearLayout>
-
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="14dp"
                 android:orientation="horizontal">
-
                 <Button
                     android:id="@+id/btnFloat"
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
-                    android:text="🫧  Nut noi"
+                    android:text="Nut noi"
                     android:textSize="13sp" />
-
                 <Button
                     android:id="@+id/btnClearCache"
                     android:layout_width="0dp"
@@ -278,8 +265,6 @@
             </LinearLayout>
         </LinearLayout>
     </ScrollView>
-
-    <!-- ===== TAB WEB (chung WebView, khong tai lai khi doi tab) ===== -->
     <LinearLayout
         android:id="@+id/paneWeb"
         android:layout_width="match_parent"
@@ -287,7 +272,6 @@
         android:layout_weight="1"
         android:orientation="vertical"
         android:visibility="gone">
-
         <LinearLayout
             android:id="@+id/webBar"
             android:layout_width="match_parent"
@@ -295,12 +279,18 @@
             android:gravity="center_vertical"
             android:orientation="horizontal"
             android:padding="8dp">
-
+            <Button
+                android:id="@+id/btnMenuSetup"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:text="☰"
+                android:textSize="20sp" />
             <EditText
                 android:id="@+id/etUrl"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
+                android:layout_marginStart="6dp"
                 android:hint="Nhap link web"
                 android:textColor="#FFFFFF"
                 android:textColorHint="#777777"
@@ -309,7 +299,6 @@
                 android:inputType="textUri"
                 android:background="#222222"
                 android:padding="8dp" />
-
             <Button
                 android:id="@+id/btnGo"
                 android:layout_width="wrap_content"
@@ -317,108 +306,24 @@
                 android:layout_marginStart="6dp"
                 android:text="Di"
                 android:textSize="12sp" />
+            <Button
+                android:id="@+id/btnReload"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:layout_marginStart="6dp"
+                android:text="R"
+                android:textSize="20sp" />
         </LinearLayout>
-
-        <LinearLayout
-            android:id="@+id/rowPreset"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:paddingLeft="8dp"
-            android:paddingRight="8dp">
-
-            <Button
-                android:id="@+id/btnPresetYt"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:text="YouTube"
-                android:textSize="12sp" />
-
-            <Button
-                android:id="@+id/btnPresetFpt"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:text="FPT Play"
-                android:textSize="12sp" />
-
-            <Button
-                android:id="@+id/btnPresetTv"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:text="TV360"
-                android:textSize="12sp" />
-
-            <Button
-                android:id="@+id/btnDesktop"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:text="Desktop"
-                android:textSize="12sp" />
-        </LinearLayout>
-
-        <LinearLayout
-            android:id="@+id/volBar"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:gravity="center_vertical"
-            android:orientation="horizontal"
-            android:paddingLeft="8dp"
-            android:paddingRight="8dp">
-
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="Video:"
-                android:textColor="#CCCCCC"
-                android:textSize="12sp" />
-
-            <SeekBar
-                android:id="@+id/seekVideoVol"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:max="100"
-                android:progress="30" />
-
-            <TextView
-                android:id="@+id/tvVideoVol"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="30%"
-                android:textColor="#FFFFFF"
-                android:textSize="12sp" />
-
-            <Button
-                android:id="@+id/btnMute"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="Tat tieng"
-                android:textSize="12sp" />
-
-            <Button
-                android:id="@+id/btnFullscreen"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="Phong to"
-                android:textSize="12sp" />
-        </LinearLayout>
-
         <FrameLayout
             android:id="@+id/webContainer"
             android:layout_width="match_parent"
             android:layout_height="0dp"
             android:layout_weight="1"
             android:layout_marginTop="4dp">
-
             <WebView
                 android:id="@+id/webView"
                 android:layout_width="match_parent"
                 android:layout_height="match_parent" />
         </FrameLayout>
     </LinearLayout>
-
 </LinearLayout>

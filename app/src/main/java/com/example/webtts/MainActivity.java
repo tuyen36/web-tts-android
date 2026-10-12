@@ -61,9 +61,7 @@ public class MainActivity extends AppCompatActivity {
             + "AppleWebKit/537.36 (KHTML, like Gecko) "
             + "Chrome/122.0.0.0 Safari/537.36";
 
-    // ----- tab -----
-    private Button tabSetup;
-    private Button tabWeb;
+    // ----- tab (V2.4: nut 3 gach 2 chieu, khong con thanh tab) -----
     private ScrollView paneSetup;
     private LinearLayout paneWeb;
 
@@ -94,24 +92,18 @@ public class MainActivity extends AppCompatActivity {
     private float rate = 1.0f;
     private int ttsVol = 100;
 
-    // ----- web -----
+    // ----- web (V2.5: header + WebView full, bo 2 hang preset/volume) -----
     private EditText etUrl;
     private WebView webView;
     private FrameLayout webContainer;
     private LinearLayout webBar;
-    private LinearLayout rowPreset;
-    private LinearLayout volBar;
-    private TextView tvVideoVol;
-    private SeekBar seekVideoVol;
-    private Button btnMute;
-    private Button btnFullscreen;
-    private Button btnDesktop;
 
     private int videoVol = 30;
     private boolean videoMuted = false;
-    private boolean fullscreen = false;
-    private boolean desktopMode = true;
+    /** V2.4: desktop mac dinh TAT theo yeu cau. */
+    private boolean desktopMode = false;
     private boolean webLoaded = false;
+    /** V2.5: preset web (YouTube/FPT/TV360) chuyen sang man Cai dat. */
 
     private View videoCustomView;
     private WebChromeClient.CustomViewCallback videoCustomCb;
@@ -124,13 +116,11 @@ public class MainActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-        // Tab
-        tabSetup = findViewById(R.id.tabSetup);
-        tabWeb = findViewById(R.id.tabWeb);
+        // V2.4: 2 nut 3 gach chuyen man 2 chieu (khong con thanh tab).
         paneSetup = findViewById(R.id.paneSetup);
         paneWeb = findViewById(R.id.paneWeb);
-        tabSetup.setOnClickListener(v -> showTab(true));
-        tabWeb.setOnClickListener(v -> showTab(false));
+        findViewById(R.id.btnMenuWeb).setOnClickListener(v -> showTab(false));
+        findViewById(R.id.btnMenuSetup).setOnClickListener(v -> showTab(true));
 
         // Cai dat
         tvStatus = findViewById(R.id.tvStatus);
@@ -149,25 +139,19 @@ public class MainActivity extends AppCompatActivity {
         seekRate = findViewById(R.id.seekRate);
         seekTtsVol = findViewById(R.id.seekTtsVol);
 
-        // Web
+        // Web (V2.5: chi header + WebView, bo 2 hang preset/volume)
         etUrl = findViewById(R.id.etUrl);
         webView = findViewById(R.id.webView);
         webContainer = findViewById(R.id.webContainer);
         webBar = findViewById(R.id.webBar);
-        rowPreset = findViewById(R.id.rowPreset);
-        volBar = findViewById(R.id.volBar);
-        tvVideoVol = findViewById(R.id.tvVideoVol);
-        seekVideoVol = findViewById(R.id.seekVideoVol);
-        btnMute = findViewById(R.id.btnMute);
-        btnFullscreen = findViewById(R.id.btnFullscreen);
-        btnDesktop = findViewById(R.id.btnDesktop);
 
         SharedPreferences sp = getSharedPreferences("webtts", MODE_PRIVATE);
         rate = sp.getFloat("rate", 1.0f);
         ttsVol = sp.getInt("ttsVol", 100);
         voice = sp.getInt("voice", TtsPlaybackService.VOICE_GOOGLE);
         videoVol = sp.getInt("videoVol", 30);
-        desktopMode = sp.getBoolean("desktopMode", true);
+        // V2.4: desktop mac dinh TAT (chi doc neu sp da luu true).
+        desktopMode = sp.getBoolean("desktopMode", false);
         etUrl.setText(sp.getString("lastUrl", PRESET_YT));
 
         refreshVoiceUi();
@@ -176,12 +160,10 @@ public class MainActivity extends AppCompatActivity {
         tvRate.setText(String.format(Locale.US, "%.1fx", rate));
         seekTtsVol.setProgress(ttsVol);
         tvTtsVol.setText(ttsVol + "%");
-        seekVideoVol.setProgress(videoVol);
-        tvVideoVol.setText(videoVol + "%");
-        refreshMuteBtn();
-        refreshDesktopBtn();
         refreshPlayBtn();
-        showTab(true);
+        refreshDesktopBtn();
+        initSwipe();
+        showTab(true, false);
 
         findViewById(R.id.btnPickSrt).setOnClickListener(v -> pickSrt());
         btnPlayPause.setOnClickListener(v -> setPlaying(!playing));
@@ -194,15 +176,28 @@ public class MainActivity extends AppCompatActivity {
         btnAutoSub.setOnClickListener(v -> autoFetchSub(false));
 
         findViewById(R.id.btnGo).setOnClickListener(v -> goUrl());
-        findViewById(R.id.btnPresetYt).setOnClickListener(
-                v -> openPreset(PRESET_YT));
-        findViewById(R.id.btnPresetFpt).setOnClickListener(
-                v -> openPreset(PRESET_FPT));
-        findViewById(R.id.btnPresetTv).setOnClickListener(
-                v -> openPreset(PRESET_TV360));
-        btnDesktop.setOnClickListener(v -> toggleDesktopMode());
-        btnMute.setOnClickListener(v -> toggleMute());
-        btnFullscreen.setOnClickListener(v -> toggleFullscreen());
+        findViewById(R.id.btnReload).setOnClickListener(v -> {
+            try {
+                webView.reload();
+                toast("Dang tai lai trang...");
+            } catch (Exception e) {
+                toast("Khong tai lai duoc.");
+            }
+        });
+        // 4 nut preset man Cai dat: sang man Web + mo link luon (V2.5).
+        findViewById(R.id.btnPresetYt2).setOnClickListener(v -> {
+            showTab(false, true);
+            openPreset(PRESET_YT);
+        });
+        findViewById(R.id.btnPresetFpt2).setOnClickListener(v -> {
+            showTab(false, true);
+            openPreset(PRESET_FPT);
+        });
+        findViewById(R.id.btnPresetTv2).setOnClickListener(v -> {
+            showTab(false, true);
+            openPreset(PRESET_TV360);
+        });
+        findViewById(R.id.btnDesktop2).setOnClickListener(v -> toggleDesktopMode());
 
         seekPos.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
             @Override public void onProgressChanged(SeekBar s, int p, boolean fromUser) {
@@ -231,22 +226,6 @@ public class MainActivity extends AppCompatActivity {
                 tvTtsVol.setText(p + "%");
                 TtsPlaybackService.setTtsVolume(p);
                 sp.edit().putInt("ttsVol", p).apply();
-            }
-            @Override public void onStartTrackingTouch(SeekBar s) {}
-            @Override public void onStopTrackingTouch(SeekBar s) {}
-        });
-        seekVideoVol.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
-            @Override public void onProgressChanged(SeekBar s, int p, boolean fromUser) {
-                videoVol = p;
-                tvVideoVol.setText(p + "%");
-                sp.edit().putInt("videoVol", p).apply();
-                if (fromUser) {
-                    if (p > 0 && videoMuted) {
-                        videoMuted = false;
-                        refreshMuteBtn();
-                    }
-                    applyVideoVolume();
-                }
             }
             @Override public void onStartTrackingTouch(SeekBar s) {}
             @Override public void onStopTrackingTouch(SeekBar s) {}
@@ -315,17 +294,60 @@ public class MainActivity extends AppCompatActivity {
         askNotif();
     }
 
-    // ---------- tab (khong tai lai trang) ----------
+    // ---------- doi man (khong tai lai trang Web) ----------
 
+    // V2.5: truot 2 man bang nut 3 gach + vuot (khong tai lai Web).
     private void showTab(boolean setup) {
-        paneSetup.setVisibility(setup ? View.VISIBLE : View.GONE);
-        paneWeb.setVisibility(setup ? View.GONE : View.VISIBLE);
-        tabSetup.setAlpha(setup ? 1.0f : 0.5f);
-        tabWeb.setAlpha(setup ? 0.5f : 1.0f);
+        showTab(setup, true);
+    }
+
+    private void showTab(boolean setup, boolean animate) {
+        View out = setup ? paneWeb : paneSetup;
+        View in = setup ? paneSetup : paneWeb;
+        if (!animate) {
+            out.setVisibility(View.GONE);
+            in.setVisibility(View.VISIBLE);
+        } else {
+            // Truot: man cu ra theo chieu, man moi vao tu canh.
+            float w = 800f;
+            float dir = setup ? 1f : -1f; // ve Cai dat: sang phai; sang Web: sang trai
+            in.setVisibility(View.VISIBLE);
+            in.setTranslationX(-dir * w);
+            in.animate().translationX(0).setDuration(220).start();
+            out.animate().translationX(dir * w).setDuration(220)
+                    .withEndAction(() -> {
+                        out.setVisibility(View.GONE);
+                        out.setTranslationX(0);
+                    }).start();
+        }
         if (!setup && !webLoaded) {
             webLoaded = true;
             webView.loadUrl(etUrl.getText().toString());
         }
+    }
+
+    /** Vuot trai/phai tren ca 2 man de doi man (giong drawer). */
+    private void initSwipe() {
+        View root = findViewById(android.R.id.content);
+        if (root == null) return;
+        root.setOnTouchListener(new View.OnTouchListener() {
+            float x0;
+            @Override public boolean onTouch(View v, android.view.MotionEvent e) {
+                switch (e.getAction()) {
+                    case android.view.MotionEvent.ACTION_DOWN:
+                        x0 = e.getX();
+                        return false;
+                    case android.view.MotionEvent.ACTION_UP:
+                        float dx = e.getX() - x0;
+                        boolean onSetup =
+                                paneSetup.getVisibility() == View.VISIBLE;
+                        if (onSetup && dx < -120) showTab(false, true);
+                        else if (!onSetup && dx > 120) showTab(true, true);
+                        return false;
+                }
+                return false;
+            }
+        });
     }
 
     // ---------- cai dat ----------
@@ -597,8 +619,11 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void refreshDesktopBtn() {
-        if (btnDesktop == null) return;
-        btnDesktop.setText(desktopMode ? "Desktop: Bat" : "Desktop: Tat");
+        String t = desktopMode ? "Desktop: Bat" : "Desktop: Tat";
+        try {
+            Button b2 = findViewById(R.id.btnDesktop2);
+            if (b2 != null) b2.setText(t);
+        } catch (Exception ignored) {}
     }
 
     private void toggleDesktopMode() {
@@ -652,38 +677,12 @@ public class MainActivity extends AppCompatActivity {
 
     private void toggleMute() {
         videoMuted = !videoMuted;
-        refreshMuteBtn();
         applyVideoVolume();
     }
 
-    private void refreshMuteBtn() {
-        btnMute.setText(videoMuted ? "Mo tieng" : "Tat tieng");
-    }
-
+    /** V2.5: bo nut Phong to rieng — fullscreen bang nut video YouTube. */
     private void toggleFullscreen() {
-        if (videoCustomView != null) {
-            exitVideoFullscreen();
-            return;
-        }
-        fullscreen = !fullscreen;
-        int gone = fullscreen ? View.GONE : View.VISIBLE;
-        webBar.setVisibility(gone);
-        rowPreset.setVisibility(gone);
-        volBar.setVisibility(gone);
-        btnFullscreen.setText(fullscreen ? "Thu nho" : "Phong to");
-        if (fullscreen) {
-            getWindow().addFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN);
-            try {
-                setRequestedOrientation(
-                        android.content.pm.ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE);
-            } catch (Exception ignored) {}
-        } else {
-            getWindow().clearFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN);
-            try {
-                setRequestedOrientation(
-                        android.content.pm.ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED);
-            } catch (Exception ignored) {}
-        }
+        if (videoCustomView != null) exitVideoFullscreen();
     }
 
     private void enterVideoFullscreen(View view,
@@ -704,14 +703,11 @@ public class MainActivity extends AppCompatActivity {
                             android.view.Gravity.CENTER));
         } catch (Exception ignored) {}
         webBar.setVisibility(View.GONE);
-        rowPreset.setVisibility(View.GONE);
-        volBar.setVisibility(View.GONE);
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN);
         try {
             setRequestedOrientation(
                     android.content.pm.ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE);
         } catch (Exception ignored) {}
-        btnFullscreen.setText("Thu nho");
     }
 
     private void exitVideoFullscreen() {
@@ -726,16 +722,12 @@ public class MainActivity extends AppCompatActivity {
         } catch (Exception ignored) {}
         videoCustomView = null;
         videoCustomCb = null;
-        fullscreen = false;
         webBar.setVisibility(View.VISIBLE);
-        rowPreset.setVisibility(View.VISIBLE);
-        volBar.setVisibility(View.VISIBLE);
         getWindow().clearFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN);
         try {
             setRequestedOrientation(
                     android.content.pm.ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED);
         } catch (Exception ignored) {}
-        btnFullscreen.setText("Phong to");
     }
 
     @Override
@@ -749,11 +741,7 @@ public class MainActivity extends AppCompatActivity {
             exitVideoFullscreen();
             return;
         }
-        if (fullscreen) {
-            toggleFullscreen();
-            return;
-        }
-        // O tab web ma web lui duoc thi lui web, khong thoat app.
+        // O man web ma web lui duoc thi lui web, khong thoat app.
         if (paneWeb.getVisibility() == View.VISIBLE && webView.canGoBack()) {
             webView.goBack();
             return;
