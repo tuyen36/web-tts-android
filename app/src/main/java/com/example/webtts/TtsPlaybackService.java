@@ -125,6 +125,8 @@ public class TtsPlaybackService extends Service
     private float offset = 0f;
     private float rate = 1.0f;
     private int ttsVol = 100;
+    /** Tat tieng sub (volume=0) nhung timeline van chay — thay cho Pause. */
+    private boolean muted = false;
     /** true = sub ra loa bao thuc (tach khoi Netflix), false = chung media. */
     private boolean splitAudio = true;
     private String lastCueText = "...";
@@ -182,7 +184,7 @@ public class TtsPlaybackService extends Service
     private LinearLayout floatPanel;
     private TextView floatCue;
     private TextView floatTime;
-    private Button floatPlayPause;
+    private Button floatMuteBtn;
     private Button floatVoiceBtn;
     private WindowManager.LayoutParams floatParams;
     private boolean floatShown = false;
@@ -220,6 +222,7 @@ public class TtsPlaybackService extends Service
         offset = sp.getFloat("offset", 0f);
         rate = sp.getFloat("rate", 1.0f);
         ttsVol = sp.getInt("ttsVol", 100);
+        muted = sp.getBoolean("muted", false);
         splitAudio = sp.getBoolean("splitAudio", true);
         voice = sp.getInt("voice", VOICE_GOOGLE);
     }
@@ -246,7 +249,7 @@ public class TtsPlaybackService extends Service
             speaker.setSubtitles(sharedSubs);
             speaker.setAudioOffset(offset);
             speaker.setSpeechRate(rate);
-            speaker.setTtsVolume(ttsVol);
+            speaker.setTtsVolume(effVol());
             applySplitAudio();
             recomputeDuration();
             updateNotif();
@@ -494,12 +497,12 @@ public class TtsPlaybackService extends Service
             speaker.setSubtitlesIfNew(sharedSubs);
             speaker.setAudioOffset(offset);
             speaker.setSpeechRate(rate);
-            speaker.setTtsVolume(ttsVol);
+            speaker.setTtsVolume(effVol());
         }
         if (edge != null) {
             edge.setSubtitles(sharedSubs);
             edge.setBaseRate(rate);
-            edge.setTtsVolume(ttsVol);
+            edge.setTtsVolume(effVol());
         }
         recomputeDuration();
         updateNotif();
@@ -560,11 +563,35 @@ public class TtsPlaybackService extends Service
         }
     }
 
+    /** Volume thuc te phat = 0 khi muted, khong doi ttsVol da luu. */
+    private int effVol() {
+        return muted ? 0 : ttsVol;
+    }
+
+    /** Bat/tat tieng sub — timeline van chay, chi volume = 0%. */
+    public static void setMuted(boolean m) {
+        if (running != null) {
+            running.muted = m;
+            try {
+                running.getSharedPreferences("webtts", MODE_PRIVATE)
+                        .edit().putBoolean("muted", m).apply();
+            } catch (Exception ignored) {}
+            if (running.speaker != null) running.speaker.setTtsVolume(running.effVol());
+            if (running.edge != null) running.edge.setTtsVolume(running.effVol());
+            running.refreshFloatMuteBtn();
+            running.updateNotif();
+        }
+    }
+
+    public static boolean isMuted() {
+        return running != null && running.muted;
+    }
+
     public static void setTtsVolume(int p) {
         if (running != null) {
             running.ttsVol = p;
-            if (running.speaker != null) running.speaker.setTtsVolume(p);
-            if (running.edge != null) running.edge.setTtsVolume(p);
+            if (running.speaker != null) running.speaker.setTtsVolume(running.effVol());
+            if (running.edge != null) running.edge.setTtsVolume(running.effVol());
         }
     }
 
@@ -694,7 +721,16 @@ public class TtsPlaybackService extends Service
         floatDot.setText("TTS");
         floatDot.setTextSize(13);
         floatDot.setAlpha(FLOAT_ALPHA);
-        floatDot.setBackgroundColor(0xFF0066CC);
+        // V2.7: nut noi bo tron, nen den (thay mau xanh cu).
+        try {
+            android.graphics.drawable.GradientDrawable bg =
+                    new android.graphics.drawable.GradientDrawable();
+            bg.setColor(0xFF000000);
+            bg.setCornerRadius(200f);
+            floatDot.setBackground(bg);
+        } catch (Exception e) {
+            floatDot.setBackgroundColor(0xFF000000);
+        }
         floatDot.setTextColor(0xFFFFFFFF);
         floatDot.setPadding(24, 24, 24, 24);
         floatDot.setOnClickListener(v -> togglePanel());
@@ -741,10 +777,12 @@ public class TtsPlaybackService extends Service
 
         LinearLayout row1 = new LinearLayout(ctx);
         row1.setOrientation(LinearLayout.HORIZONTAL);
-        floatPlayPause = new Button(ctx);
-        floatPlayPause.setText(playing ? "Pause" : "Play");
-        floatPlayPause.setTextSize(12);
-        floatPlayPause.setOnClickListener(v -> setPlaying(!playing));
+        // V2.7: bo nut Pause (video YouTube bat lai ngay nen khong an) —
+        // thay bang Mute bat/tat tieng sub, timeline van chay.
+        floatMuteBtn = new Button(ctx);
+        floatMuteBtn.setTextSize(12);
+        refreshFloatMuteBtn();
+        floatMuteBtn.setOnClickListener(v -> setMuted(!muted));
         Button bBack = new Button(ctx);
         bBack.setText("-1s");
         bBack.setTextSize(12);
@@ -753,7 +791,7 @@ public class TtsPlaybackService extends Service
         bFwd.setText("+1s");
         bFwd.setTextSize(12);
         bFwd.setOnClickListener(v -> nudge(1.0));
-        row1.addView(floatPlayPause);
+        row1.addView(floatMuteBtn);
         row1.addView(bBack);
         row1.addView(bFwd);
         floatPanel.addView(row1);
@@ -781,8 +819,9 @@ public class TtsPlaybackService extends Service
                 vv.setText(p + "%");
                 getSharedPreferences("webtts", MODE_PRIVATE)
                         .edit().putInt("ttsVol", p).apply();
-                if (speaker != null) speaker.setTtsVolume(p);
-                if (edge != null) edge.setTtsVolume(p);
+                if (speaker != null) speaker.setTtsVolume(effVol());
+                if (edge != null) edge.setTtsVolume(effVol());
+                refreshFloatMuteBtn();
             }
             @Override public void onStartTrackingTouch(SeekBar s) {}
             @Override public void onStopTrackingTouch(SeekBar s) {}
@@ -873,8 +912,12 @@ public class TtsPlaybackService extends Service
     }
 
     private void refreshFloatPlayBtn() {
-        if (floatPlayPause != null) {
-            floatPlayPause.setText(playing ? "Pause" : "Play");
+        // V2.7: khong con nut Play/Pause tren nut noi.
+    }
+
+    private void refreshFloatMuteBtn() {
+        if (floatMuteBtn != null) {
+            floatMuteBtn.setText(muted ? "Mo tieng" : "Mute");
         }
     }
 

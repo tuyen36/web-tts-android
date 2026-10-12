@@ -74,6 +74,7 @@ public class MainActivity extends AppCompatActivity {
     private TextView tvTtsVol;
     private TextView tvVoiceBadge;
     private Button btnPlayPause;
+    private Button btnMute;
     private Button btnFloat;
     private Button btnVoiceGoogle;
     private Button btnVoiceHoaiMy;
@@ -130,6 +131,7 @@ public class MainActivity extends AppCompatActivity {
         tvTtsVol = findViewById(R.id.tvTtsVol);
         tvVoiceBadge = findViewById(R.id.tvVoiceBadge);
         btnPlayPause = findViewById(R.id.btnPlayPause);
+        btnMute = findViewById(R.id.btnMute);
         btnFloat = findViewById(R.id.btnFloat);
         btnVoiceGoogle = findViewById(R.id.btnVoiceGoogle);
         btnVoiceHoaiMy = findViewById(R.id.btnVoiceHoaiMy);
@@ -161,12 +163,14 @@ public class MainActivity extends AppCompatActivity {
         seekTtsVol.setProgress(ttsVol);
         tvTtsVol.setText(ttsVol + "%");
         refreshPlayBtn();
+        refreshMuteBtn();
         refreshDesktopBtn();
         initSwipe();
         showTab(true, false);
 
         findViewById(R.id.btnPickSrt).setOnClickListener(v -> pickSrt());
         btnPlayPause.setOnClickListener(v -> setPlaying(!playing));
+        btnMute.setOnClickListener(v -> toggleMuteUi());
         btnFloat.setOnClickListener(v -> ensureFloat());
         btnVoiceGoogle.setOnClickListener(v -> setVoice(
                 TtsPlaybackService.VOICE_GOOGLE));
@@ -510,6 +514,20 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+    /** V2.7: Mute bat/tat tieng sub — timeline van chay (thay Pause loi). */
+    private void toggleMuteUi() {
+        ensureService();
+        boolean m = !TtsPlaybackService.isMuted();
+        TtsPlaybackService.setMuted(m);
+        refreshMuteBtn();
+        toast(m ? "Da tat tieng sub (van chay gio)." : "Da mo tieng sub.");
+    }
+
+    private void refreshMuteBtn() {
+        if (btnMute == null) return;
+        btnMute.setText(TtsPlaybackService.isMuted() ? "Mo tieng" : "Mute");
+    }
+
     private void setVoice(int v) {
         voice = v;
         getSharedPreferences("webtts", MODE_PRIVATE)
@@ -827,6 +845,7 @@ public class MainActivity extends AppCompatActivity {
         voice = TtsPlaybackService.getVoice();
         position = TtsPlaybackService.getPosition();
         refreshPlayBtn();
+        refreshMuteBtn();
         refreshVoiceUi();
         refreshCacheBtn();
         syncUi();
