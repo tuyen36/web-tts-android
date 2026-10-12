@@ -12,8 +12,8 @@ android {
         // API hien dai (TTS gb, SAF, WebView nhe), APK gon hon ban K016.
         minSdk 29
         targetSdk 34
-        versionCode 8
-        versionName "2.1"
+        versionCode 9
+        versionName "2.2"
     }
 
     buildTypes {
@@ -29,6 +29,7 @@ android {
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_1_8
         targetCompatibility JavaVersion.VERSION_1_8
+        coreLibraryDesugaringEnabled true
     }
 }
 
@@ -40,4 +41,8 @@ dependencies {
     implementation "androidx.recyclerview:recyclerview:1.3.2"
     // V1.7: WebSocket cho Edge TTS HoaiMy (port tu edge-tts Python).
     implementation "org.java-websocket:Java-WebSocket:1.5.6"
+    // V2.2: NewPipeExtractor FORK tuyen36 (giong youtube-lite) de tu lay sub.
+    implementation "com.github.tuyen36:NewPipeExtractor:v0.26.5-k016"
+    implementation "com.squareup.okhttp3:okhttp:3.14.9"
+    coreLibraryDesugaring "com.android.tools:desugar_jdk_libs:2.1.4"
 }

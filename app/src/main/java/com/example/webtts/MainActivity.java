@@ -39,14 +39,12 @@ import java.util.Timer;
 import java.util.TimerTask;
 
 /**
- * V2.0: 1 Activity 2 TAB — Cai dat + Web chung 1 WebView.
+ * V2.2: 1 Activity 2 TAB — Cai dat + Web chung 1 WebView.
  *
  * - Bo offset dong bo (can bang nut noi +-1s + gio chay).
- * - Bo WebActivity rieng: doi tab chi setVisibility -> WebView KHONG
- *   tai lai trang, video van phat.
- * - Sub doc tu service nen: ca 2 tab nghe chung 1 tieng (het mat tieng
- *   khi sang tab web). WebView day currentTime ve service nhu cu.
- * - UI hien dai theo ban Netflix TTS.
+ * - Doi tab chi setVisibility -> WebView KHONG tai lai trang.
+ * - Sub doc tu service nen: ca 2 tab nghe chung 1 tieng.
+ * - TU LAY SUB YOUTUBE: nut + tu chay khi doi videoId (port .py).
  */
 public class MainActivity extends AppCompatActivity {
 
@@ -82,7 +80,10 @@ public class MainActivity extends AppCompatActivity {
     private Button btnVoiceGoogle;
     private Button btnVoiceHoaiMy;
     private Button btnClearCache;
+    private Button btnAutoSub;
     private int voice = TtsPlaybackService.VOICE_GOOGLE;
+    /** videoId dang co sub tu dong (de khong tai lai). */
+    private String autoVideoId = null;
     private SeekBar seekPos;
     private SeekBar seekRate;
     private SeekBar seekTtsVol;
@@ -143,6 +144,7 @@ public class MainActivity extends AppCompatActivity {
         btnVoiceGoogle = findViewById(R.id.btnVoiceGoogle);
         btnVoiceHoaiMy = findViewById(R.id.btnVoiceHoaiMy);
         btnClearCache = findViewById(R.id.btnClearCache);
+        btnAutoSub = findViewById(R.id.btnAutoSub);
         seekPos = findViewById(R.id.seekPos);
         seekRate = findViewById(R.id.seekRate);
         seekTtsVol = findViewById(R.id.seekTtsVol);
@@ -189,6 +191,7 @@ public class MainActivity extends AppCompatActivity {
         btnVoiceHoaiMy.setOnClickListener(v -> setVoice(
                 TtsPlaybackService.VOICE_HOAIMY));
         btnClearCache.setOnClickListener(v -> clearCacheUi());
+        btnAutoSub.setOnClickListener(v -> autoFetchSub(false));
 
         findViewById(R.id.btnGo).setOnClickListener(v -> goUrl());
         findViewById(R.id.btnPresetYt).setOnClickListener(
@@ -363,19 +366,64 @@ public class MainActivity extends AppCompatActivity {
                 toast("SRT khong co phu de hop le.");
                 return;
             }
-            subs = parsed;
-            duration = 0;
-            for (SubtitleCue c : subs) duration = Math.max(duration, c.end);
-            position = 0;
-            ensureService();
-            TtsPlaybackService.setSharedSubtitles(subs);
-            tvStatus.setText("Da nap " + subs.size() + " cau phu de.");
-            toast("Da nap " + subs.size() + " cau.");
-            refreshCacheBtn();
-            syncUi();
+            applyNewSubs(parsed, "SRT (" + parsed.size() + " cau)");
         } catch (Exception e) {
             toast("Khong doc duoc SRT: " + e.getMessage());
         }
+    }
+
+    /** Nap sub moi (tu .srt tay hay tu dong) — dung chung reset 00:00. */
+    private void applyNewSubs(List<SubtitleCue> parsed, String label) {
+        subs = parsed;
+        duration = 0;
+        for (SubtitleCue c : subs) duration = Math.max(duration, c.end);
+        position = 0;
+        ensureService();
+        TtsPlaybackService.setSharedSubtitles(subs);
+        tvStatus.setText("Da nap " + label + ".");
+        toast("Da nap " + label + ".");
+        refreshCacheBtn();
+        syncUi();
+    }
+
+    // ---------- tu lay sub YouTube (port .py) ----------
+
+    /**
+     * Lay sub tu link trong o URL tab Web.
+     * quiet=true khi tu chay doi video (khong spam toast).
+     */
+    private void autoFetchSub(boolean quiet) {
+        String url = etUrl != null ? etUrl.getText().toString().trim() : "";
+        if (url.isEmpty()) {
+            if (!quiet) toast("Nhap link YouTube o tab Web truoc.");
+            autoVideoId = null;
+            return;
+        }
+        String vid = SubtitleAutoFetcher.extractVideoId(url);
+        if (vid == null) {
+            if (!quiet) toast("Link khong phai YouTube.");
+            return;
+        }
+        if (vid.equals(autoVideoId) && !subs.isEmpty()) return;
+        if (!quiet) {
+            tvStatus.setText("Dang lay sub YouTube (" + vid + ")...");
+            toast("Dang lay sub YouTube...");
+        }
+        SubtitleAutoFetcher.fetch(url, new SubtitleAutoFetcher.Callback() {
+            @Override public void onOk(List<SubtitleCue> cues, String label) {
+                runOnUiThread(() -> {
+                    autoVideoId = vid;
+                    applyNewSubs(cues, "YouTube " + label);
+                });
+            }
+            @Override public void onError(String msg) {
+                runOnUiThread(() -> {
+                    autoVideoId = null;
+                    tvStatus.setText("Tu lay sub loi: " + msg);
+                    if (!quiet) toast("Tu lay sub loi: " + msg);
+                });
+            }
+        });
     }
 
     private void setPlaying(boolean p) {
@@ -489,6 +537,9 @@ public class MainActivity extends AppCompatActivity {
         getSharedPreferences("webtts", MODE_PRIVATE)
                 .edit().putString("lastUrl", url).apply();
         webView.loadUrl(url);
+        // Doi link -> tu lay sub video moi (quiet, khong spam).
+        autoVideoId = null;
+        autoFetchSub(true);
     }
 
     private void openPreset(String url) {
@@ -496,6 +547,8 @@ public class MainActivity extends AppCompatActivity {
         getSharedPreferences("webtts", MODE_PRIVATE)
                 .edit().putString("lastUrl", url).apply();
         webView.loadUrl(url);
+        autoVideoId = null;
+        autoFetchSub(true);
     }
 
     private void applyDesktopMode(WebSettings ws) {

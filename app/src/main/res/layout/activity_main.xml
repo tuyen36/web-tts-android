@@ -147,6 +147,14 @@
                 android:text="📁  Chon file phu de (.srt)"
                 android:textSize="14sp" />
 
+            <Button
+                android:id="@+id/btnAutoSub"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:text="✨  Tu lay sub YouTube"
+                android:textSize="14sp" />
+
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
