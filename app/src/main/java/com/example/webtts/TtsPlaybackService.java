@@ -45,7 +45,7 @@ import java.util.Locale;
 public class TtsPlaybackService extends Service
         implements TextToSpeech.OnInitListener {
 
-    // ----- lenh tu Activity / nut noi -----
+    // ----- lenh tu Activity / nut noi / WebView -----
     public static final String ACTION_PLAY = "com.example.webtts.PLAY";
     public static final String ACTION_PAUSE = "com.example.webtts.PAUSE";
     public static final String ACTION_TOGGLE = "com.example.webtts.TOGGLE";
@@ -53,7 +53,13 @@ public class TtsPlaybackService extends Service
     public static final String ACTION_NUDGE = "com.example.webtts.NUDGE";
     public static final String ACTION_SHOW_FLOAT = "com.example.webtts.SHOW_FLOAT";
     public static final String ACTION_HIDE_FLOAT = "com.example.webtts.HIDE_FLOAT";
+    public static final String ACTION_WEB_PROGRESS =
+            "com.example.webtts.WEB_PROGRESS";
     public static final String EXTRA_DELTA = "delta";
+    public static final String EXTRA_WEB_TIME = "web_time";
+    public static final String EXTRA_WEB_PLAYING = "web_playing";
+    /** Nguong seek nhu SEEK_THRESHOLD Python: lech qua thi nhay theo YouTube. */
+    private static final double WEB_SYNC_THRESHOLD = 1.2;
 
     private static final String CH_ID = "webtts_playback";
     private static final int NOTIF_ID = 1001;
@@ -365,6 +371,10 @@ public class TtsPlaybackService extends Service
             } else if (ACTION_NUDGE.equals(a)) {
                 double d = intent.getDoubleExtra(EXTRA_DELTA, 0);
                 nudge(d);
+            } else if (ACTION_WEB_PROGRESS.equals(a)) {
+                double wt = intent.getDoubleExtra(EXTRA_WEB_TIME, -1);
+                boolean wp = intent.getBooleanExtra(EXTRA_WEB_PLAYING, false);
+                onWebProgress(wt, wp);
             } else if (ACTION_SHOW_FLOAT.equals(a)) {
                 showFloat();
             } else if (ACTION_HIDE_FLOAT.equals(a)) {
@@ -444,6 +454,41 @@ public class TtsPlaybackService extends Service
         refreshFloatTime();
     }
 
+    /**
+     * Bam gio YouTube that (JS day ve moi 250ms).
+     * - Play/Pause video -> Play/Pause sub theo.
+     * - Lech nho (<1.2s): giu cau dang doc (tranh cat lien tuc gay cam).
+     * - Seek/lech lon: nhay moc gio + cat cau cu -> doc cau tai gio moi.
+     */
+    private void onWebProgress(double webTime, boolean webPlaying) {
+        if (webTime < 0 || sharedSubs.isEmpty()) {
+            // Chua co sub: chi doi nut Play theo video.
+            return;
+        }
+        if (webPlaying != playing) {
+            setPlaying(webPlaying);
+        }
+        if (!playing) return;
+        double now = clockNow();
+        double diff = webTime - now;
+        if (Math.abs(diff) <= WEB_SYNC_THRESHOLD) return;
+        // Seek: nhay theo YouTube ngay.
+        position = webTime;
+        if (position < 0) position = 0;
+        if (duration > 0 && position > duration) position = duration;
+        syncClock();
+        if (voice == VOICE_HOAIMY && edge != null) {
+            edge.stopPlayer();
+            int idx = SubtitleParser.findIndex(sharedSubs, position + offset);
+            if (idx >= 0) edge.preloadFrom(idx);
+            driveEngines();
+        } else if (speaker != null) {
+            speaker.resetIndex();
+            speaker.onPosition(position);
+        }
+        refreshFloatTime();
+    }
+
     private void applyShared() {
         if (speaker != null) {
             speaker.setSubtitlesIfNew(sharedSubs);
@@ -476,6 +521,16 @@ public class TtsPlaybackService extends Service
         Intent i = new Intent(ctx, TtsPlaybackService.class);
         i.setAction(ACTION_NUDGE);
         i.putExtra(EXTRA_DELTA, delta);
+        startSvc(ctx, i);
+    }
+
+    /** WebView day gio YouTube that ve (khong cat cau neu lech nho). */
+    public static void cmdWebProgress(Context ctx, double webTime,
+                                       boolean webPlaying) {
+        Intent i = new Intent(ctx, TtsPlaybackService.class);
+        i.setAction(ACTION_WEB_PROGRESS);
+        i.putExtra(EXTRA_WEB_TIME, webTime);
+        i.putExtra(EXTRA_WEB_PLAYING, webPlaying);
         startSvc(ctx, i);
     }
 

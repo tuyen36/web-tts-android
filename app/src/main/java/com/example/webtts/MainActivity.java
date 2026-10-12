@@ -681,10 +681,9 @@ public class MainActivity extends AppCompatActivity {
     }
 
     /**
-     * FIX mat tieng tab web: truoc day WebActivity day setPosition lien tuc
-     * de timeline service -> service chot moc + cat cau lien tuc nen khong
-     * doc. Nay: chi day Play/Pause theo video, KHONG day position lien tuc.
-     * Sub chay theo dong ho service; muon dong bo thi bam Play 2 ben cung luc.
+     * WebView day gio YouTube that ve service (moi 250ms).
+     * Service tu Play/Pause theo video + nhay moc khi seek.
+     * Khong cat cau khi lech nho (<1.2s) de het mat tieng.
      */
     private class VideoBridge {
         @JavascriptInterface
@@ -695,18 +694,15 @@ public class MainActivity extends AppCompatActivity {
         @JavascriptInterface
         public void onProgress(final double time, final boolean playingNow,
                                final double webDur) {
+            // Day thang ve service (khong qua bien playing cua Activity).
+            TtsPlaybackService.cmdWebProgress(MainActivity.this, time,
+                    playingNow && !subs.isEmpty());
+            // Refresh nut Play tren UI theo service.
             runOnUiThread(() -> {
-                boolean wantPlay = playingNow && !subs.isEmpty();
-                if (wantPlay != playing) {
-                    playing = wantPlay;
+                boolean p = TtsPlaybackService.isPlayingNow();
+                if (p != playing) {
+                    playing = p;
                     refreshPlayBtn();
-                    if (wantPlay) {
-                        TtsPlaybackService.cmd(MainActivity.this,
-                                TtsPlaybackService.ACTION_PLAY);
-                    } else {
-                        TtsPlaybackService.cmd(MainActivity.this,
-                                TtsPlaybackService.ACTION_PAUSE);
-                    }
                 }
             });
         }
