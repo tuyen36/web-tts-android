@@ -275,6 +275,17 @@ public class MainActivity extends AppCompatActivity {
                 injectHook();
                 applyVideoVolume();
             }
+            @Override public void onPageStarted(WebView view, String url,
+                                                android.graphics.Bitmap favicon) {
+                super.onPageStarted(view, url, favicon);
+                trackWebUrl(url);
+            }
+            @Override public void doUpdateVisitedHistory(WebView view,
+                                                         String url,
+                                                         boolean isReload) {
+                super.doUpdateVisitedHistory(view, url, isReload);
+                trackWebUrl(url);
+            }
         });
         webView.addJavascriptInterface(new VideoBridge(), "WebTTS");
 
@@ -388,12 +399,36 @@ public class MainActivity extends AppCompatActivity {
 
     // ---------- tu lay sub YouTube (port .py) ----------
 
+    /** Link that su cua WebView (cap nhat khi bam xem video ben trong). */
+    private String currentWebUrl = null;
+
     /**
-     * Lay sub tu link trong o URL tab Web.
+     * Theo doi URL that cua WebView (YouTube doi trang noi bo SPA).
+     * Cap nhat o nhap + tu lay sub video moi.
+     */
+    private void trackWebUrl(String url) {
+        if (url == null || url.isEmpty()) return;
+        if (url.equals(currentWebUrl)) return;
+        currentWebUrl = url;
+        runOnUiThread(() -> {
+            if (etUrl != null) etUrl.setText(url);
+            getSharedPreferences("webtts", MODE_PRIVATE)
+                    .edit().putString("lastUrl", url).apply();
+        });
+        // Chi tu lay khi la link video xem duoc (co videoId).
+        if (SubtitleAutoFetcher.extractVideoId(url) != null) {
+            autoFetchSub(true);
+        }
+    }
+
+    /**
+     * Lay sub tu trang WebView dang xem (uu tien), fallback o URL.
      * quiet=true khi tu chay doi video (khong spam toast).
      */
     private void autoFetchSub(boolean quiet) {
-        String url = etUrl != null ? etUrl.getText().toString().trim() : "";
+        String url = currentWebUrl != null && !currentWebUrl.isEmpty()
+                ? currentWebUrl
+                : (etUrl != null ? etUrl.getText().toString().trim() : "");
         if (url.isEmpty()) {
             if (!quiet) toast("Nhap link YouTube o tab Web truoc.");
             autoVideoId = null;
@@ -534,6 +569,7 @@ public class MainActivity extends AppCompatActivity {
             url = "https://" + url;
         }
         etUrl.setText(url);
+        currentWebUrl = url;
         getSharedPreferences("webtts", MODE_PRIVATE)
                 .edit().putString("lastUrl", url).apply();
         webView.loadUrl(url);
@@ -544,6 +580,7 @@ public class MainActivity extends AppCompatActivity {
 
     private void openPreset(String url) {
         etUrl.setText(url);
+        currentWebUrl = url;
         getSharedPreferences("webtts", MODE_PRIVATE)
                 .edit().putString("lastUrl", url).apply();
         webView.loadUrl(url);
